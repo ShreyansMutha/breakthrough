@@ -1,0 +1,136 @@
+import { useEffect, useState } from 'react';
+import { socket } from './socket';
+import Lobby from './components/Lobby';
+import Board from './components/Board';
+
+function loadSaved() {
+  try {
+    const raw = localStorage.getItem('qr');
+    if (raw) return JSON.parse(raw);
+  } catch {}
+  return null;
+}
+
+function save({ code, name }) {
+  try { localStorage.setItem('qr', JSON.stringify({ code, name })); } catch {}
+}
+
+function clearSaved() {
+  try { localStorage.removeItem('qr'); } catch {}
+}
+
+export default function App() {
+  const [room, setRoom] = useState(null);
+  const [playerIndex, setPlayerIndex] = useState(null);
+  const [error, setError] = useState('');
+  const [opponentLeft, setOpponentLeft] = useState(false);
+  const [reconnecting, setReconnecting] = useState(false);
+
+  useEffect(() => {
+    const onRoomUpdate = (r) => setRoom(r);
+    const onOpponentLeft = () => setOpponentLeft(true);
+    socket.on('roomUpdate', onRoomUpdate);
+    socket.on('opponentLeft', onOpponentLeft);
+    return () => {
+      socket.off('roomUpdate', onRoomUpdate);
+      socket.off('opponentLeft', onOpponentLeft);
+    };
+  }, []);
+
+  useEffect(() => {
+    const saved = loadSaved();
+    if (!saved || !saved.code || !saved.name) return;
+    setReconnecting(true);
+
+    const onError = () => { setReconnecting(false); clearSaved(); };
+    const timeout = setTimeout(() => { socket.off('connect_error', onError); setReconnecting(false); }, 5000);
+    socket.on('connect_error', onError);
+
+    socket.emit('rejoin', { name: saved.name, code: saved.code }, (res) => {
+      clearTimeout(timeout);
+      socket.off('connect_error', onError);
+      setReconnecting(false);
+      if (res.ok) {
+        setPlayerIndex(res.playerIndex);
+        setRoom(res);
+      } else {
+        clearSaved();
+      }
+    });
+  }, []);
+
+  const createRoom = (name, playerCount = 2) => {
+    setError('');
+    socket.emit('createRoom', { name, playerCount }, (res) => {
+      if (res.ok) {
+        setPlayerIndex(res.playerIndex);
+        setRoom(res);
+        save({ code: res.code, name });
+      } else {
+        setError(res.error || 'Could not create room');
+      }
+    });
+  };
+
+  const joinRoom = (name, code) => {
+    setError('');
+    socket.emit('joinRoom', { name, code }, (res) => {
+      if (res.ok) {
+        setPlayerIndex(res.playerIndex);
+        setRoom(res);
+        save({ code: res.code, name });
+      } else {
+        setError(res.error || 'Could not join room');
+      }
+    });
+  };
+
+  const sendMove = (move) => {
+    socket.emit('move', { code: room.code, move }, (res) => {
+      setError(res.ok ? '' : res.error || 'Illegal move');
+    });
+  };
+
+  const rematch = () => {
+    setOpponentLeft(false);
+    socket.emit('rematch', { code: room.code });
+  };
+
+  const leave = () => {
+    setRoom(null);
+    setPlayerIndex(null);
+    setOpponentLeft(false);
+    setReconnecting(false);
+    setError('');
+    clearSaved();
+  };
+
+  if (reconnecting) {
+    return (
+      <div className="screen">
+        <div className="panel center">
+          <p className="tagline">Reconnecting…</p>
+          <div className="overlay-actions" style={{ marginTop: 16 }}>
+            <button className="btn" onClick={leave}>Leave</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!room) {
+    return <Lobby onCreate={createRoom} onJoin={joinRoom} error={error} />;
+  }
+
+  return (
+    <Board
+      room={room}
+      playerIndex={playerIndex}
+      onMove={sendMove}
+      onRematch={rematch}
+      onLeave={leave}
+      error={error}
+      opponentLeft={opponentLeft}
+    />
+  );
+}

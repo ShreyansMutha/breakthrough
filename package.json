@@ -1,0 +1,15 @@
+{
+  "name": "breakthrough",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "postinstall": "cd client && npm install && cd ../server && npm install",
+    "build": "cd client && npm run build",
+    "start": "node server/src/index.js",
+    "dev": "concurrently -n server,client -c cyan,green \"cd server && npm run dev\" \"cd client && npm run dev\""
+  },
+  "dependencies": {
+    "concurrently": "^9.1.2"
+  }
+}
