@@ -355,7 +355,7 @@ export default function BoardScene({
 
       {pawns.map((p, i) => {
         const side = playerSide(i, playerCount);
-        const faceY = side === 0 ? 0 : side === 1 ? Math.PI / 2 : side === 2 ? Math.PI : -Math.PI / 2;
+        const faceY = side === 0 ? 0 : side === 1 ? -Math.PI / 2 : side === 2 ? Math.PI : Math.PI / 2;
         return (
           <Character
             key={`p-${i}`}
