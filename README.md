@@ -1,65 +1,61 @@
-# Quoridor — Multiplayer (prototype)
+# Breakthrough
 
-A real-time, two-player [Quoridor](https://en.wikipedia.org/wiki/Quoridor) game.
-Move your pawn to the opposite side of the 9×9 board while dropping walls to slow
-your opponent — but you can never completely seal off their path to the goal.
+A real-time multiplayer board game for 2–10 players. Race your pawn across a dynamically-sized board while placing walls to block your rivals — but never seal off their path completely.
 
-- **Server** — Node + Express + Socket.IO. Authoritative: it owns the game state
-  and validates every move (turn order, legal pawn moves & jumps, wall overlaps,
-  and the "always a path" rule via BFS).
-- **Client** — React + Vite + socket.io-client. Renders the board, highlights legal
-  moves, previews wall placement, and shows live turn / wall counts.
+- **Server** — Node + Express + Socket.IO. Authoritative game state with full move validation (turn order, pawn jumps, wall overlaps, always-a-path guarantee via BFS).
+- **Client** — React + Three.js (React Three Fiber) + Vite. Full 3D board with animated characters, nametags, orbit/follow cameras, and wall preview.
 
-## Run it locally
+## Quick Start
 
-Open **two terminals**.
-
-**1. Server**
 ```bash
-cd quoridor/server
 npm install
-npm run dev        # http://localhost:3001
+npm run dev        # runs server (:3005) + client (:3000) concurrently
 ```
 
-**2. Client**
+Open `http://localhost:3000` in multiple browser tabs. Create a room, share the 4-letter code, and play.
+
+### Manual start
+
 ```bash
-cd quoridor/client
-npm install
-npm run dev        # http://localhost:5173
+# Terminal 1 — server
+cd server && npm install && npm run dev
+
+# Terminal 2 — client
+cd client && npm install && npm run dev
 ```
-
-Open `http://localhost:5173` in two browser tabs (or two devices on your network).
-In tab 1 click **Create a room** and share the 4-letter code. In tab 2 enter the
-code and **Join**. Play!
-
-> To play across devices, point the client at your machine's LAN IP by setting
-> `VITE_SERVER_URL` (e.g. create `client/.env.local` with
-> `VITE_SERVER_URL=http://192.168.1.50:3001`).
 
 ## How to play
 
-- On your turn, either **Move** your pawn one square (orthogonally), or place a
-  **Wall** (↔ horizontal / ↕ vertical) between squares.
-- Pawns may **jump** over an adjacent opponent; if a wall blocks the straight jump,
-  you may step diagonally instead.
-- Each player has **10 walls**. A wall can never fully block a player from reaching
-  their goal row.
-- First pawn to reach the opposite edge wins. 🏆
+- On your turn, **Move** your pawn one square (orthogonally), or **place a wall** to block paths.
+- Pawns **jump** over an adjacent opponent; if a wall blocks the straight jump, step diagonally instead.
+- Wall count scales with player count (fewer walls in larger games).
+- Board size grows with more players (9×9 up to 25×25).
+- First pawn to reach their goal edge wins.
+
+## Deploy
+
+```bash
+npm run build       # builds client to client/dist/
+npm start           # serves API + built client on :3005
+```
+
+Deploy as a single Node.js process on Railway, Render, or Fly.io.
 
 ## Project layout
+
 ```
-quoridor/
-├── server/
-│   └── src/
-│       ├── index.js      # Socket.IO server + event handlers
-│       ├── rooms.js      # room codes & lifecycle
-│       └── quoridor.js   # authoritative rules engine
-└── client/
-    └── src/
-        ├── App.jsx       # screens + socket wiring
-        ├── socket.js     # socket.io-client instance
-        ├── quoridor.js   # rules mirror (UI hints only)
-        └── components/
-            ├── Lobby.jsx
-            └── Board.jsx
+Breakthrough/
+├── server/src/
+│   ├── index.js      # Socket.IO server + event handlers
+│   ├── rooms.js      # room codes & lifecycle
+│   └── quoridor.js   # authoritative rules engine
+├── client/src/
+│   ├── App.jsx       # screens + socket wiring + reconnection
+│   ├── socket.js     # socket.io-client instance
+│   ├── quoridor.js   # rules mirror (UI hints only)
+│   └── components/
+│       ├── Lobby.jsx
+│       ├── Board.jsx
+│       └── BoardScene.jsx
+└── package.json      # root scripts (dev / build / start)
 ```
