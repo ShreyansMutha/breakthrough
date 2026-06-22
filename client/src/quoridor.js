@@ -4,11 +4,9 @@ export const COLORS = [
 ];
 
 export function boardSize(playerCount) {
-  if (playerCount <= 2) return 9;
-  if (playerCount <= 4) return 13;
-  if (playerCount <= 6) return 17;
-  if (playerCount <= 8) return 21;
-  return 25;
+  if (playerCount === 2) return 9;
+  if (playerCount === 3) return 11;
+  return 13;
 }
 
 export function wallsPerPlayer(playerCount) {
@@ -44,9 +42,9 @@ export function goalRow(pi, total) {
   const size = boardSize(total);
   switch (side) {
     case 0: return size - 1;
-    case 1: return 0;
+    case 1: return undefined;
     case 2: return 0;
-    case 3: return size - 1;
+    case 3: return undefined;
   }
 }
 

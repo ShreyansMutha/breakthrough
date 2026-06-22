@@ -1,68 +1,31 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState } from 'react';
 import { Canvas } from '@react-three/fiber';
-import { legalPawnMoves, canPlaceWall } from '../quoridor';
+import { legalPawnMoves, canPlaceWall, COLORS, playerSide } from '../quoridor';
+
+function wallOrientation(mode, pi, pc) {
+  const side = playerSide(pi, pc);
+  const base = mode === 'wallH' ? 'H' : 'V';
+  return (side === 1 || side === 3) ? (base === 'H' ? 'V' : 'H') : base;
+}
 import BoardScene from './BoardScene';
 
-function dirsForPlayer(pi) {
-  const side = pi % 4;
-  switch (side) {
-    case 0: return { forward: [-1, 0], back: [1, 0], left: [0, -1], right: [0, 1] };
-    case 1: return { forward: [0, -1], back: [0, 1], left: [-1, 0], right: [1, 0] };
-    case 2: return { forward: [1, 0], back: [-1, 0], left: [0, 1], right: [0, -1] };
-    case 3: return { forward: [0, 1], back: [0, -1], left: [1, 0], right: [-1, 0] };
-  }
-}
-
-const VIEWS = [
-  { id: 'board', label: 'Board' },
-  { id: 'fp', label: '3rd' },
-];
 const ACTIONS = [
-  { id: 'move', label: 'Move' },
-  { id: 'wallH', label: '↔' },
-  { id: 'wallV', label: '↕' },
+  { id: 'move', icon: '♟' },
+  { id: 'wallH', icon: '▬' },
+  { id: 'wallV', icon: '▯' },
 ];
 
 export default function Board({ room, playerIndex, onMove, onRematch, onLeave, error, opponentLeft }) {
   const [mode, setMode] = useState('move');
   const [view, setView] = useState('board');
   const [hover, setHover] = useState(null);
+  const toggleView = () => setView(v => v === 'board' ? 'fp' : 'board');
 
-  const { state, started, players, code } = room;
+  const { state, started, players, code, rematchReady } = room;
   const myTurn = started && state.turn === playerIndex && state.winner === null;
   const wallsLeft = started ? state.wallsLeft[playerIndex] : 0;
   const moves = myTurn && mode === 'move' ? legalPawnMoves(state, playerIndex) : [];
-
-  const DIR = dirsForPlayer(playerIndex);
-
-  const tryStep = (sem) => {
-    if (!myTurn || mode !== 'move') return;
-    const [dr, dc] = DIR[sem];
-    const me = state.pawns[playerIndex];
-    const target = moves.find((m) =>
-      dr !== 0
-        ? m.c === me.c && Math.sign(m.r - me.r) === Math.sign(dr)
-        : m.r === me.r && Math.sign(m.c - me.c) === Math.sign(dc)
-    );
-    if (target) onMove({ type: 'pawn', r: target.r, c: target.c });
-  };
-
-  const stepRef = useRef(tryStep);
-  stepRef.current = tryStep;
-
-  useEffect(() => {
-    const onKey = (e) => {
-      const k = e.key.toLowerCase();
-      let sem = null;
-      if (k === 'arrowup' || k === 'w') sem = 'forward';
-      else if (k === 'arrowdown' || k === 's') sem = 'back';
-      else if (k === 'arrowleft' || k === 'a') sem = 'left';
-      else if (k === 'arrowright' || k === 'd') sem = 'right';
-      if (sem) { e.preventDefault(); stepRef.current(sem); }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, []);
+  const iRematched = rematchReady?.[playerIndex];
 
   if (!started) {
     const need = state ? state.playerCount : (room.playerCount || 2);
@@ -81,7 +44,7 @@ export default function Board({ room, playerIndex, onMove, onRematch, onLeave, e
   }
 
   const legalSet = new Set(moves.map((m) => `${m.r},${m.c}`));
-  const orientation = mode === 'wallH' ? 'H' : 'V';
+  const orientation = wallOrientation(mode, playerIndex, state.playerCount);
   const wallValid = !!hover && wallsLeft > 0 && canPlaceWall(state, orientation, hover.r, hover.c);
 
   const handleCellClick = (r, c) => {
@@ -126,6 +89,9 @@ export default function Board({ room, playerIndex, onMove, onRematch, onLeave, e
 
       <div className="hud-top">
         <div className="hud-left-group">
+          <button className="hud-pill" onClick={toggleView}>
+            {view === 'board' ? 'Board' : 'Person'}
+          </button>
           <span className="hud-room">{code}</span>
           <button className="hud-pill" onClick={onLeave}>Leave</button>
         </div>
@@ -133,54 +99,61 @@ export default function Board({ room, playerIndex, onMove, onRematch, onLeave, e
 
       <div className="hud-panel">
         <div className="hud-panel-row">
-          {VIEWS.map((v) => (
-            <button
-              key={v.id}
-              className={`hud-pill ${view === v.id ? 'sel' : ''}`}
-              onClick={() => setView(v.id)}
-            >
-              {v.label}
-            </button>
-          ))}
-        </div>
-        <div className="hud-panel-row">
           {ACTIONS.map((a) => (
             <button
               key={a.id}
-              className={`hud-pill ${mode === a.id ? 'sel' : ''}`}
+              className={`hud-action-btn ${mode === a.id ? 'sel' : ''}`}
               onClick={() => a.id === 'move' ? setMode('move') : chooseWall(a.id)}
               disabled={a.id !== 'move' && (!myTurn || wallsLeft === 0)}
             >
-              {a.label}
-            </button>
+              <span className="icon">{a.icon}</span>
+          </button>
           ))}
         </div>
       </div>
 
-      {error && <div className="hud-error">{error}</div>}
-
-      {(state.winner !== null || opponentLeft) && (
-        <div className="overlay">
-          <div className="panel center">
-            {opponentLeft ? (
-              <>
-                <h1 className="title">Player left</h1>
-                <p className="tagline">Someone disconnected.</p>
-                <button className="btn primary" onClick={onLeave}>Back to lobby</button>
-              </>
-            ) : (
-              <>
-                <h1 className="title">{state.winner === playerIndex ? 'You win!' : `${players[state.winner]} wins!`}</h1>
-                <p className="tagline">{state.winner === playerIndex ? 'You crossed the board first.' : `${players[state.winner]} got across first.`}</p>
-                <div className="overlay-actions">
-                  <button className="btn primary" onClick={onRematch}>Rematch</button>
-                  <button className="btn ghost" onClick={onLeave}>Leave</button>
-                </div>
-              </>
-            )}
-          </div>
+      {started && (
+        <div className="hud-players">
+          {players.map((name, i) => {
+            const clr = COLORS[i % COLORS.length];
+            const left = state.disconnected?.[i];
+            return (
+              <div key={i} className={`hud-player${state.turn === i && !left ? ' turn' : ''}`} style={{ opacity: left ? 0.35 : 1 }}>
+                <span className="hud-swatch" style={{ background: left ? '#64748b' : clr }} />
+                <span className="hud-pname">{left ? `${name} (left)` : name}</span>
+                <span className="hud-walls" style={{ color: left ? '#64748b' : 'var(--wall)' }}>{state.wallsLeft?.[i] ?? 0}</span>
+              </div>
+            );
+          })}
         </div>
       )}
+
+      {error && <div className="hud-error">{error}</div>}
+
+      {state.winner !== null ? (
+        <div className="overlay">
+          <div className="panel center">
+            <h1 className="title">{state.winner === playerIndex ? 'You win!' : `${players[state.winner]} wins!`}</h1>
+            <p className="tagline">{state.winner === playerIndex ? 'You crossed the board first.' : `${players[state.winner]} got across first.`}</p>
+            <div className="overlay-actions">
+              {iRematched ? (
+                <p className="tagline" style={{ margin: 0 }}>Waiting for others to rematch…</p>
+              ) : (
+                <button className="btn primary" onClick={onRematch}>Rematch</button>
+              )}
+              <button className="btn ghost" onClick={onLeave}>Leave</button>
+            </div>
+          </div>
+        </div>
+      ) : opponentLeft ? (
+        <div className="overlay">
+          <div className="panel center">
+            <h1 className="title">Player left</h1>
+            <p className="tagline">Someone disconnected.</p>
+            <button className="btn primary" onClick={onLeave}>Back to lobby</button>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

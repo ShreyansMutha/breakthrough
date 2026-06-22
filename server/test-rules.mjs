@@ -15,13 +15,13 @@ const ok = (name, cond) => {
   }
 };
 
-// For 2 players, player 0 starts at top (0,5), player 1 at bottom (8,5), size=9
+// For 2 players, player 0 starts at top (0,4), player 1 at bottom (8,4), size=9
 
-// 1. Starting moves for player 0 at (0,5): down, left, right (up is off-board)
+// 1. Starting moves for player 0 at (0,4): down, left, right (up is off-board)
 let s = initialState();
 const m0 = legalPawnMoves(s, 0);
 ok('p0 has 3 starting moves', m0.length === 3);
-ok('p0 can move down to (1,5)', m0.some((x) => x.r === 1 && x.c === 5));
+ok('p0 can move down to (1,4)', m0.some((x) => x.r === 1 && x.c === 4));
 ok('p0 cannot move off-board up', !m0.some((x) => x.r < 0));
 
 // 2. Wall placement + overlap rejection
@@ -35,9 +35,9 @@ ok('non-conflicting V wall at (4,5) ok', canPlaceWall(s, 'V', 4, 5));
 
 // 3. Wall blocks movement
 s = initialState();
-s.walls.push({ orientation: 'H', r: 0, c: 5 }); // blocks (0,5)<->(1,5)
+s.walls.push({ orientation: 'H', r: 0, c: 4 }); // blocks (0,4)<->(1,4)
 const mBlocked = legalPawnMoves(s, 0);
-ok('wall blocks downward move', !mBlocked.some((x) => x.r === 1 && x.c === 5));
+ok('wall blocks downward move', !mBlocked.some((x) => x.r === 1 && x.c === 4));
 ok('p0 still has left/right', mBlocked.length === 2);
 
 // 4. Jump over adjacent opponent
@@ -66,8 +66,8 @@ ok('sealing the corner (V at 0,0) is rejected', !canPlaceWall(s, 'V', 0, 0));
 
 // 7. Turn order + win detection via applyMove
 s = initialState();
-ok('p1 cannot move on p0 turn', !applyMove(s, 1, { type: 'pawn', r: 1, c: 5 }).ok);
-ok('p0 valid move accepted', applyMove(s, 0, { type: 'pawn', r: 1, c: 5 }).ok);
+ok('p1 cannot move on p0 turn', !applyMove(s, 1, { type: 'pawn', r: 1, c: 4 }).ok);
+ok('p0 valid move accepted', applyMove(s, 0, { type: 'pawn', r: 1, c: 4 }).ok);
 ok('turn passed to p1', s.turn === 1);
 
 s = initialState();

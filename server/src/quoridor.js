@@ -4,11 +4,9 @@ export const COLORS = [
 ];
 
 export function boardSize(playerCount) {
-  if (playerCount <= 2) return 9;
-  if (playerCount <= 4) return 13;
-  if (playerCount <= 6) return 17;
-  if (playerCount <= 8) return 21;
-  return 25;
+  if (playerCount === 2) return 9;
+  if (playerCount === 3) return 11;
+  return 13;
 }
 
 export function wallsPerPlayer(playerCount) {
@@ -41,19 +39,17 @@ function playerSide(pi, total) {
 
 function spawnFor(pi, total, size) {
   const counts = sideAssignments(total);
-  let side = 0, idx = 0, acc = 0;
+  let side = 0, acc = 0;
   for (let s = 0; s < 4; s++) {
-    if (pi < acc + counts[s]) { side = s; idx = pi - acc; break; }
+    if (pi < acc + counts[s]) { side = s; break; }
     acc += counts[s];
   }
-  const spacing = size / (counts[side] + 1);
-  const pos = Math.round(spacing * (idx + 1));
-  const clamp = (v) => Math.max(0, Math.min(size - 1, v));
+  const center = Math.floor((size - 1) / 2);
   switch (side) {
-    case 0: return { r: 0, c: clamp(pos) };
-    case 1: return { r: clamp(pos), c: size - 1 };
-    case 2: return { r: size - 1, c: clamp(pos) };
-    case 3: return { r: clamp(pos), c: 0 };
+    case 0: return { r: 0, c: center };
+    case 1: return { r: center, c: size - 1 };
+    case 2: return { r: size - 1, c: center };
+    case 3: return { r: center, c: 0 };
   }
 }
 
@@ -62,9 +58,9 @@ export function goalRow(pi, total) {
   const size = boardSize(total);
   switch (side) {
     case 0: return size - 1;
-    case 1: return 0;
+    case 1: return undefined;
     case 2: return 0;
-    case 3: return size - 1;
+    case 3: return undefined;
   }
 }
 
@@ -80,7 +76,7 @@ function goalCol(pi, total) {
 }
 
 export function initialState(playerCount) {
-  const pc = Math.max(2, Math.min(playerCount || 2, 10));
+  const pc = Math.max(2, Math.min(playerCount || 2, 4));
   const size = boardSize(pc);
   return {
     size,
@@ -90,6 +86,7 @@ export function initialState(playerCount) {
     wallsLeft: Array.from({ length: pc }, () => wallsPerPlayer(pc)),
     turn: 0,
     winner: null,
+    disconnected: Array.from({ length: pc }, () => false),
   };
 }
 
@@ -220,6 +217,9 @@ export function applyMove(state, pi, move) {
 
   if (state.winner === null) {
     let next = (pi + 1) % state.playerCount;
+    while (state.disconnected?.[next] && next !== pi) {
+      next = (next + 1) % state.playerCount;
+    }
     state.turn = next;
   }
   return { ok: true };

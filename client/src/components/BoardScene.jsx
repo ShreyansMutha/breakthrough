@@ -25,6 +25,7 @@ function Character({ pawn, color, active, playerIndex, name, faceY, size, half, 
   const lArm = useRef();
   const rArm = useRef();
   const torso = useRef();
+  const ringRef = useRef();
 
   const w = useRef({
     fromX: cx(pawn.c, half, unit), fromZ: cz(pawn.r, half, unit),
@@ -76,6 +77,10 @@ function Character({ pawn, color, active, playerIndex, name, faceY, size, half, 
       if (rArm.current) { rArm.current.rotation.x = 0; rArm.current.rotation.z = -0.18; }
       if (torso.current) { torso.current.rotation.y = 0; torso.current.position.y = 0; }
     }
+    if (ringRef.current) {
+      const s = 1 + Math.sin(t * 2.5) * 0.08;
+      ringRef.current.scale.set(s, s, 1);
+    }
   });
 
   const emissive = active ? color : '#000000';
@@ -86,7 +91,7 @@ function Character({ pawn, color, active, playerIndex, name, faceY, size, half, 
   return (
     <group ref={ref} position={[initX, TOP, initZ]} rotation={[0, faceY, 0]}>
       {active && (
-        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]}>
+        <mesh ref={ringRef} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.08, 0]}>
           <ringGeometry args={[0.34, 0.46, 32]} />
           <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.8} transparent opacity={0.85} />
         </mesh>
@@ -148,29 +153,67 @@ function Character({ pawn, color, active, playerIndex, name, faceY, size, half, 
   );
 }
 
-function Tile({ r, c, legal, goalHighlight, goalColor, half, unit, onClick }) {
+const hc = CELL / 2;
+
+function Tri({ pts, color, onClick, onPointerOver, onPointerOut }) {
+  const verts = [pts[0][0], 0, pts[0][1], pts[1][0], 0, pts[1][1], pts[2][0], 0, pts[2][1]];
+  const up = [0, 1, 0, 0, 1, 0, 0, 1, 0];
+  return (
+    <mesh receiveShadow onClick={onClick} onPointerOver={onPointerOver} onPointerOut={onPointerOut}>
+      <bufferGeometry>
+        <bufferAttribute attach="attributes-position" count={3} array={new Float32Array(verts)} itemSize={3} />
+        <bufferAttribute attach="attributes-normal" count={3} array={new Float32Array(up)} itemSize={3} />
+      </bufferGeometry>
+      <meshStandardMaterial color={color} roughness={0.85} />
+    </mesh>
+  );
+}
+
+function MoveDot() {
+  const ref = useRef();
+  useFrame((st) => {
+    if (!ref.current) return;
+    const s = 1 + Math.sin(st.clock.elapsedTime * 4) * 0.2;
+    ref.current.scale.set(s, 1, s);
+  });
+  return (
+    <mesh ref={ref} position={[0, TOP + 0.06, 0]}>
+      <cylinderGeometry args={[0.18, 0.18, 0.04, 20]} />
+      <meshStandardMaterial color="#9b59b6" emissive="#9b59b6" emissiveIntensity={0.9} transparent opacity={0.85} />
+    </mesh>
+  );
+}
+
+function Tile({ r, c, legal, half, unit, onClick, goalColor, cornerColors, diag, size }) {
   const base = (r + c) % 2 === 0 ? '#3a4467' : '#323b59';
-  const color = legal ? '#7184dd' : goalHighlight ? goalColor : base;
-  const emissive = legal ? '#5566c4' : goalHighlight ? goalColor : '#000000';
-  const emissiveIntensity = legal ? 0.7 : goalHighlight ? 0.35 : 0;
+  const color = legal ? '#9b59b6' : goalColor || base;
+  const isCorner = (r === 0 || r === size - 1) && (c === 0 || c === size - 1);
+
+  const ck = legal ? (e) => { e.stopPropagation(); onClick(r, c); } : undefined;
+  const ov = legal ? (e) => { e.stopPropagation(); document.body.style.cursor = 'pointer'; } : undefined;
+  const ou = legal ? () => (document.body.style.cursor = 'auto') : undefined;
+
+  const shared = { onClick: ck, onPointerOver: ov, onPointerOut: ou };
 
   return (
     <group position={[cx(c, half, unit), 0, cz(r, half, unit)]}>
-      <mesh
-        receiveShadow
-        onClick={legal ? (e) => { e.stopPropagation(); onClick(r, c); } : undefined}
-        onPointerOver={legal ? (e) => { e.stopPropagation(); document.body.style.cursor = 'pointer'; } : undefined}
-        onPointerOut={legal ? () => (document.body.style.cursor = 'auto') : undefined}
-      >
-        <boxGeometry args={[CELL, TILE_H, CELL]} />
-        <meshStandardMaterial color={color} emissive={emissive} emissiveIntensity={emissiveIntensity} roughness={0.85} />
-      </mesh>
-      {legal && (
-        <mesh position={[0, TOP + 0.06, 0]}>
-          <cylinderGeometry args={[0.16, 0.16, 0.04, 24]} />
-          <meshStandardMaterial color="#ffffff" emissive="#ffffff" emissiveIntensity={0.6} />
+      {cornerColors ? diag === 'tl-br' ? (
+        <>
+          <Tri pts={[[-hc, -hc], [hc, -hc], [hc, hc]]} color={cornerColors[0]} {...shared} />
+          <Tri pts={[[-hc, -hc], [hc, hc], [-hc, hc]]} color={cornerColors[1]} {...shared} />
+        </>
+      ) : (
+        <>
+          <Tri pts={[[-hc, -hc], [hc, -hc], [-hc, hc]]} color={cornerColors[0]} {...shared} />
+          <Tri pts={[[hc, -hc], [hc, hc], [-hc, hc]]} color={cornerColors[1]} {...shared} />
+        </>
+      ) : (
+        <mesh receiveShadow onClick={ck} onPointerOver={ov} onPointerOut={ou}>
+          <boxGeometry args={[CELL, TILE_H, CELL]} />
+          <meshStandardMaterial color={color} roughness={0.85} />
         </mesh>
       )}
+      {legal && !isCorner && <MoveDot />}
     </group>
   );
 }
@@ -187,21 +230,52 @@ function wallTransform(orientation, r, c, half, unit) {
 }
 
 function Wall({ orientation, r, c, preview, valid, half, unit }) {
+  const ref = useRef();
+  const coreRef = useRef();
   const { pos, args } = wallTransform(orientation, r, c, half, unit);
-  const color = preview ? (valid ? '#36d399' : '#ff6b6b') : '#f6c453';
+
+  const c1 = preview ? (valid ? '#36d399' : '#ff6b6b') : '#d7dfe1';
+  const c2 = preview ? (valid ? '#36d399' : '#ff6b6b') : '#d8e3e5';
+
+  useFrame((st) => {
+    if (!preview && ref.current) {
+      const p = Math.sin(st.clock.elapsedTime * 1.8) * 0.5 + 0.5;
+      ref.current.material.emissiveIntensity = 0.8 + p * 0.5;
+      ref.current.material.opacity = 0.8 + p * 0.25;
+    }
+    if (!preview && coreRef.current) {
+      const p = Math.sin(st.clock.elapsedTime * 2.2 + 1) * 0.5 + 0.5;
+      coreRef.current.material.opacity = 0.8 + p * 0.3;
+    }
+  });
+
   return (
-    <mesh position={pos} castShadow>
-      <boxGeometry args={args} />
-      <meshStandardMaterial
-        color={color}
-        roughness={0.55}
-        metalness={0.1}
-        transparent={preview}
-        opacity={preview ? 0.72 : 1}
-        emissive={preview && valid ? '#36d399' : '#000000'}
-        emissiveIntensity={preview && valid ? 0.3 : 0}
-      />
-    </mesh>
+    <group>
+      <mesh ref={ref} position={pos} castShadow>
+        <boxGeometry args={args} />
+        <meshStandardMaterial
+          color={c1}
+          roughness={0.15}
+          metalness={0.1}
+          transparent
+          opacity={preview ? 0.72 : 0.7}
+          emissive={c1}
+          emissiveIntensity={preview ? (valid ? 0.3 : 0) : 0.5}
+        />
+      </mesh>
+      <mesh ref={coreRef} position={pos}>
+        <boxGeometry args={args.map((d, i) => i === 1 ? d * 0.5 : d * 0.85)} />
+        <meshStandardMaterial
+          color={c2}
+          emissive={c2}
+          emissiveIntensity={preview ? 0 : 0.8}
+          transparent
+          opacity={preview ? 0 : 0.55}
+          roughness={0.1}
+          metalness={0}
+        />
+      </mesh>
+    </group>
   );
 }
 
@@ -275,7 +349,7 @@ export default function BoardScene({
   const wallMode = mode !== 'move';
   const firstPerson = view === 'fp';
 
-  const { size = 9, playerCount = 2, pawns = [], walls = [], turn = 0, winner = null } = state || {};
+  const { size = 9, playerCount = 2, pawns = [], walls = [], turn = 0, winner = null, disconnected = [] } = state || {};
   const span = size * CELL + (size - 1) * GUT;
   const half = span / 2;
   const unit = CELL + GUT;
@@ -315,27 +389,37 @@ export default function BoardScene({
         const tiles = [];
         for (let r = 0; r < size; r++) {
           for (let c = 0; c < size; c++) {
-            let goalHighlight = false;
-            let goalColor = '';
+            let rowColor = null;
+            let colColor = null;
             for (let i = 0; i < playerCount; i++) {
               const gr = goalRow(i, playerCount);
               const gc = goalCol(i, playerCount);
-              if ((gr !== undefined && r === gr) || (gc !== undefined && c === gc)) {
-                goalHighlight = true;
-                goalColor = COLORS[i % COLORS.length];
-              }
+              const clr = COLORS[i % COLORS.length];
+              if (gr !== undefined && r === gr) rowColor = clr;
+              if (gc !== undefined && c === gc) colColor = clr;
+            }
+            let goalColor = null;
+            let cornerColors = null;
+            let diag = null;
+            if (rowColor && colColor) {
+              diag = r === c ? 'tl-br' : 'tr-bl';
+              cornerColors = r === 0 ? [rowColor, colColor] : [colColor, rowColor];
+            } else {
+              goalColor = rowColor || colColor;
             }
             tiles.push(
               <Tile
                 key={`t-${r}-${c}`}
                 r={r}
                 c={c}
+                size={size}
                 legal={legalSet.has(`${r},${c}`)}
-                goalHighlight={goalHighlight}
-                goalColor={goalColor}
                 half={half}
                 unit={unit}
                 onClick={onCellClick}
+                goalColor={goalColor}
+                cornerColors={cornerColors}
+                diag={diag}
               />
             );
           }
@@ -354,6 +438,7 @@ export default function BoardScene({
       {wallMode && !firstPerson && <Hotspots onHover={setHover} onPlace={onWallPlace} size={size} half={half} unit={unit} />}
 
       {pawns.map((p, i) => {
+        if (disconnected?.[i]) return null;
         const side = playerSide(i, playerCount);
         const faceY = side === 0 ? 0 : side === 1 ? -Math.PI / 2 : side === 2 ? Math.PI : Math.PI / 2;
         return (

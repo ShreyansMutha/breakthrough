@@ -14,12 +14,14 @@ function genCode() {
 
 export function createRoom(host, playerCount = 2) {
   const code = genCode();
+  const pc = Math.max(2, Math.min(playerCount, 4));
   const room = {
     code,
-    playerCount: Math.max(2, Math.min(playerCount, 10)),
+    playerCount: pc,
     players: [host],
     state: null,
     started: false,
+    rematchReady: Array.from({ length: pc }, () => false),
   };
   rooms.set(code, room);
   return room;
@@ -60,6 +62,7 @@ export function resetRoom(code) {
     room.state = initialState(room.playerCount);
     room.started = true;
     room.winner = null;
+    room.rematchReady = Array.from({ length: room.playerCount }, () => false);
   }
   return room;
 }

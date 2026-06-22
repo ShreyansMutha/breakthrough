@@ -13,7 +13,7 @@ import {
   removeRoom,
   findRoomBySocket,
 } from './rooms.js';
-import { applyMove } from './quoridor.js';
+import { applyMove, initialState } from './quoridor.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -30,6 +30,7 @@ function publicState(room) {
     started: room.started,
     players: room.players.map((p) => p.name),
     state: room.state,
+    rematchReady: room.rematchReady || Array.from({ length: room.playerCount || 2 }, () => false),
   };
 }
 
@@ -73,8 +74,12 @@ io.on('connection', (socket) => {
     socket.join(normalized);
     socket.data.code = normalized;
     socket.data.playerIndex = res.playerIndex;
-    cb?.({ ok: true, playerIndex: res.playerIndex, ...publicState(res.room) });
-    broadcast(res.room);
+    const room = res.room;
+    if (room.state && room.state.disconnected) {
+      room.state.disconnected[res.playerIndex] = false;
+    }
+    cb?.({ ok: true, playerIndex: res.playerIndex, ...publicState(room) });
+    broadcast(room);
   });
 
   socket.on('move', ({ code, move } = {}, cb) => {
@@ -93,20 +98,65 @@ io.on('connection', (socket) => {
   });
 
   socket.on('rematch', ({ code } = {}) => {
-    const room = resetRoom(code);
-    if (room) broadcast(room);
+    const room = getRoom(code);
+    if (!room) return;
+    const pi = socket.data.playerIndex;
+    if (pi === undefined) return;
+    if (!room.rematchReady) room.rematchReady = Array.from({ length: room.playerCount }, () => false);
+    room.rematchReady[pi] = true;
+
+    const allReady = room.players.every((p, i) => {
+      const s = io.sockets.sockets.get(p.id);
+      const connected = s && s.connected;
+      return !connected || room.rematchReady[i];
+    });
+
+    if (allReady) {
+      room.state = initialState(room.playerCount);
+      room.state.disconnected = room.players.map((p) => {
+        const s = io.sockets.sockets.get(p.id);
+        return !(s && s.connected);
+      });
+      let t = 0;
+      while (room.state.disconnected[t] && t < room.state.playerCount) t++;
+      if (t < room.state.playerCount) room.state.turn = t;
+      room.rematchReady = Array.from({ length: room.playerCount }, () => false);
+    }
+    broadcast(room);
   });
 
   socket.on('disconnect', () => {
     const room = findRoomBySocket(socket.id);
     if (!room) return;
+
+    const pi = room.players.findIndex(p => p.id === socket.id);
+    if (pi === -1) return;
+
+    if (room.state) {
+      room.state.disconnected[pi] = true;
+
+      io.to(room.code).emit('opponentLeft');
+
+      if (room.state.winner === null) {
+        let next = room.state.turn;
+        if (next === pi) {
+          next = (pi + 1) % room.state.playerCount;
+          while (room.state.disconnected[next] && next !== pi) {
+            next = (next + 1) % room.state.playerCount;
+          }
+          room.state.turn = next;
+        }
+      }
+    }
+
+    broadcast(room);
+
     setTimeout(() => {
       const stillHasPlayers = room.players.some((p) => {
         const s = io.sockets.sockets.get(p.id);
         return s && s.connected;
       });
       if (!stillHasPlayers) {
-        io.to(room.code).emit('opponentLeft');
         removeRoom(room.code);
       }
     }, 30000);

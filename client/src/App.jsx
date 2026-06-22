@@ -3,6 +3,20 @@ import { socket } from './socket';
 import Lobby from './components/Lobby';
 import Board from './components/Board';
 
+const RANDOM_NAMES = [
+  'Pixel', 'Nova', 'Echo', 'Blitz', 'Mochi',
+  'Ziggy', 'Flick', 'Hex', 'Jazz', 'Karma',
+  'Luna', 'Neon', 'Onyx', 'Pulse', 'Quirk',
+  'Rune', 'Spark', 'Tide', 'Vibe', 'Wisp',
+  'Zen', 'Arc', 'Bolt', 'Frost', 'Jade',
+];
+
+function randomName(used = []) {
+  const pool = RANDOM_NAMES.filter((n) => !used.includes(n));
+  if (pool.length) return pool[Math.floor(Math.random() * pool.length)];
+  return 'Player' + Math.random().toString(36).slice(2, 6).toUpperCase();
+}
+
 function loadSaved() {
   try {
     const raw = localStorage.getItem('qr');
@@ -27,7 +41,10 @@ export default function App() {
   const [reconnecting, setReconnecting] = useState(false);
 
   useEffect(() => {
-    const onRoomUpdate = (r) => setRoom(r);
+    const onRoomUpdate = (r) => {
+      setRoom(r);
+      if (r?.state?.winner === null) setOpponentLeft(false);
+    };
     const onOpponentLeft = () => setOpponentLeft(true);
     socket.on('roomUpdate', onRoomUpdate);
     socket.on('opponentLeft', onOpponentLeft);
@@ -61,11 +78,12 @@ export default function App() {
 
   const createRoom = (name, playerCount = 2) => {
     setError('');
-    socket.emit('createRoom', { name, playerCount }, (res) => {
+    const finalName = name?.trim() || randomName();
+    socket.emit('createRoom', { name: finalName, playerCount }, (res) => {
       if (res.ok) {
         setPlayerIndex(res.playerIndex);
         setRoom(res);
-        save({ code: res.code, name });
+        save({ code: res.code, name: finalName });
       } else {
         setError(res.error || 'Could not create room');
       }
@@ -74,11 +92,12 @@ export default function App() {
 
   const joinRoom = (name, code) => {
     setError('');
-    socket.emit('joinRoom', { name, code }, (res) => {
+    const finalName = name?.trim() || randomName();
+    socket.emit('joinRoom', { name: finalName, code }, (res) => {
       if (res.ok) {
         setPlayerIndex(res.playerIndex);
         setRoom(res);
-        save({ code: res.code, name });
+        save({ code: res.code, name: finalName });
       } else {
         setError(res.error || 'Could not join room');
       }
