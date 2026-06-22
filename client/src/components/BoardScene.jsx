@@ -1,7 +1,8 @@
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, useState } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import { Html, OrbitControls } from '@react-three/drei';
 import { COLORS, goalRow, goalCol, playerSide } from '../quoridor';
+import * as THREE from 'three';
 
 const CELL = 1.0;
 const GUT = 0.18;
@@ -18,7 +19,7 @@ const cz = (r, half, unit) => r * unit - half + CELL / 2;
 const WALK_DURATION = 0.55;
 const WALK_STRIDE = 0.7;
 
-function Character({ pawn, color, active, playerIndex, name, faceY, size, half, unit }) {
+function Character({ pawn, color, active, playerIndex, name, faceY, size, half, unit, winning }) {
   const ref = useRef();
   const lLeg = useRef();
   const rLeg = useRef();
@@ -51,7 +52,15 @@ function Character({ pawn, color, active, playerIndex, name, faceY, size, half, 
     const moving = w.current.elapsed < WALK_DURATION;
     const t = st.clock.elapsedTime;
 
-    if (moving) {
+    if (winning) {
+      g.position.y = TOP + Math.sin(t * 5) * 0.1 + 0.08;
+      g.rotation.y += Math.sin(t * 2) * 0.02;
+      if (lArm.current) { lArm.current.rotation.x = -0.4 - Math.sin(t * 3) * 0.2; lArm.current.rotation.z = -1.4; }
+      if (rArm.current) { rArm.current.rotation.x = -0.4 - Math.sin(t * 3 + 1) * 0.2; rArm.current.rotation.z = 1.4; }
+      if (lLeg.current) lLeg.current.rotation.x = Math.sin(t * 5) * 0.08;
+      if (rLeg.current) rLeg.current.rotation.x = -Math.sin(t * 5) * 0.08;
+      if (torso.current) torso.current.rotation.y = Math.sin(t * 3) * 0.05;
+    } else if (moving) {
       w.current.elapsed += delta;
       const p = Math.min(w.current.elapsed / WALK_DURATION, 1);
       const ease = p < 0.5 ? 2 * p * p : 1 - (-2 * p + 2) ** 2 / 2;
@@ -332,6 +341,73 @@ function FollowControls({ pawn, half, unit }) {
   );
 }
 
+const PARTICLE_COUNT = 80;
+
+function Celebration({ pawn, color, half, unit }) {
+  const [geo, setGeo] = useState(null);
+  const pos = useRef(new Float32Array(PARTICLE_COUNT * 3));
+  const vel = useRef([]);
+  const life = useRef(new Float32Array(PARTICLE_COUNT));
+  const burst = useRef(0);
+
+  const px = cx(pawn.c, half, unit);
+  const pz = cz(pawn.r, half, unit);
+
+  useFrame((st, delta) => {
+    burst.current += delta;
+    if (burst.current > 0.35) {
+      burst.current = 0;
+      for (let i = 0; i < PARTICLE_COUNT; i++) {
+        const theta = Math.random() * Math.PI * 2;
+        const phi = Math.random() * Math.PI * 0.8;
+        const spd = 0.6 + Math.random() * 1.2;
+        vel.current[i] = [
+          Math.sin(theta) * Math.cos(phi) * spd,
+          1.2 + Math.random() * 2,
+          Math.cos(theta) * Math.cos(phi) * spd,
+        ];
+        pos.current[i * 3] = px + (Math.random() - 0.5) * 0.2;
+        pos.current[i * 3 + 1] = TOP + 0.3;
+        pos.current[i * 3 + 2] = pz + (Math.random() - 0.5) * 0.2;
+        life.current[i] = 1;
+      }
+    }
+    for (let i = 0; i < PARTICLE_COUNT; i++) {
+      if (life.current[i] > 0) {
+        vel.current[i][1] -= 3.5 * delta;
+        pos.current[i * 3] += vel.current[i][0] * delta;
+        pos.current[i * 3 + 1] += vel.current[i][1] * delta;
+        pos.current[i * 3 + 2] += vel.current[i][2] * delta;
+        life.current[i] -= delta * 0.8;
+      }
+    }
+    if (geo) {
+      geo.attributes.position.needsUpdate = true;
+    }
+  });
+
+  useEffect(() => {
+    for (let i = 0; i < PARTICLE_COUNT; i++) {
+      pos.current[i * 3] = px;
+      pos.current[i * 3 + 1] = TOP;
+      pos.current[i * 3 + 2] = pz;
+      vel.current[i] = [0, 0, 0];
+      life.current[i] = 0;
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(pos.current, 3));
+    setGeo(g);
+  }, []);
+
+  if (!geo) return null;
+
+  return (
+    <points geometry={geo}>
+      <pointsMaterial size={0.12} color={color} transparent opacity={0.9} sizeAttenuation />
+    </points>
+  );
+}
+
 export default function BoardScene({
   state,
   playerIndex,
@@ -450,12 +526,22 @@ export default function BoardScene({
             faceY={faceY}
             name={names?.[i] || `Player ${i + 1}`}
             active={turn === i && winner === null}
+            winning={winner !== null && winner === i}
             size={size}
             half={half}
             unit={unit}
           />
         );
       })}
+
+      {winner !== null && (
+        <Celebration
+          pawn={pawns[winner]}
+          color={COLORS[winner % COLORS.length]}
+          half={half}
+          unit={unit}
+        />
+      )}
 
       {firstPerson ? (
         <FollowControls pawn={pawns[playerIndex]} half={half} unit={unit} />

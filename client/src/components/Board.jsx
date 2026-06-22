@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { legalPawnMoves, canPlaceWall, COLORS, playerSide } from '../quoridor';
+import confetti from 'canvas-confetti';
 
 function wallOrientation(mode, pi, pc) {
   const side = playerSide(pi, pc);
@@ -26,6 +27,16 @@ export default function Board({ room, playerIndex, onMove, onRematch, onLeave, e
   const wallsLeft = started ? state.wallsLeft[playerIndex] : 0;
   const moves = myTurn && mode === 'move' ? legalPawnMoves(state, playerIndex) : [];
   const iRematched = rematchReady?.[playerIndex];
+
+  useEffect(() => {
+    if (state && state.winner !== null) {
+      confetti({ particleCount: 80, spread: 70, origin: { y: 0.6 } });
+      confetti({ particleCount: 60, spread: 90, origin: { y: 0.6, x: 0.2 } });
+      confetti({ particleCount: 60, spread: 90, origin: { y: 0.6, x: 0.8 } });
+      const id = setTimeout(() => confetti({ particleCount: 40, spread: 60, origin: { y: 0.4 } }), 600);
+      return () => clearTimeout(id);
+    }
+  }, [state?.winner]);
 
   if (!started) {
     const need = state ? state.playerCount : (room.playerCount || 2);
