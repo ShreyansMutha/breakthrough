@@ -122,6 +122,7 @@ export default function App() {
     setReconnecting(false);
     setError('');
     clearSaved();
+    setTimeout(() => location.reload(), 1000);
   };
 
   if (reconnecting) {
