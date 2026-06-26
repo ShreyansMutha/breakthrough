@@ -9,6 +9,7 @@ function wallOrientation(mode, pi, pc) {
   return (side === 1 || side === 3) ? (base === 'H' ? 'V' : 'H') : base;
 }
 import BoardScene from './BoardScene';
+import Chat from './Chat';
 
 const ACTIONS = [
   { id: 'move', icon: '♟' },
@@ -122,6 +123,8 @@ export default function Board({ room, playerIndex, onMove, onRematch, onLeave, e
           ))}
         </div>
       </div>
+
+      <Chat playerIndex={playerIndex} code={code} />
 
       {started && (
         <div className="hud-players">

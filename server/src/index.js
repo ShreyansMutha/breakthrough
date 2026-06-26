@@ -125,6 +125,15 @@ io.on('connection', (socket) => {
     broadcast(room);
   });
 
+  socket.on('chatMessage', ({ code, text } = {}) => {
+    const room = getRoom(code);
+    if (!room) return;
+    const pi = socket.data.playerIndex;
+    if (pi === undefined) return;
+    const name = room.players[pi]?.name || 'Unknown';
+    io.to(code).emit('chatMessage', { playerIndex: pi, name, text: text?.trim()?.slice(0, 200) });
+  });
+
   socket.on('disconnect', () => {
     const room = findRoomBySocket(socket.id);
     if (!room) return;
