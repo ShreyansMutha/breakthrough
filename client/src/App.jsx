@@ -36,6 +36,7 @@ function clearSaved() {
 export default function App() {
   const [room, setRoom] = useState(null);
   const [playerIndex, setPlayerIndex] = useState(null);
+  const [isSpectator, setIsSpectator] = useState(false);
   const [error, setError] = useState('');
   const [opponentLeft, setOpponentLeft] = useState(false);
   const [reconnecting, setReconnecting] = useState(false);
@@ -104,6 +105,20 @@ export default function App() {
     });
   };
 
+  const spectateRoom = (name, code) => {
+    setError('');
+    const finalName = name?.trim() || 'Spectator';
+    socket.emit('joinAsSpectator', { name: finalName, code }, (res) => {
+      if (res.ok) {
+        setIsSpectator(true);
+        setPlayerIndex(null);
+        setRoom(res);
+      } else {
+        setError(res.error || 'Could not spectate');
+      }
+    });
+  };
+
   const sendMove = (move) => {
     socket.emit('move', { code: room.code, move }, (res) => {
       setError(res.ok ? '' : res.error || 'Illegal move');
@@ -118,11 +133,12 @@ export default function App() {
   const leave = () => {
     setRoom(null);
     setPlayerIndex(null);
+    setIsSpectator(false);
     setOpponentLeft(false);
     setReconnecting(false);
     setError('');
     clearSaved();
-    setTimeout(() => location.reload(), 1000);
+    setTimeout(() => location.reload(), 2000);
   };
 
   if (reconnecting) {
@@ -139,13 +155,14 @@ export default function App() {
   }
 
   if (!room) {
-    return <Lobby onCreate={createRoom} onJoin={joinRoom} error={error} />;
+    return <Lobby onCreate={createRoom} onJoin={joinRoom} onSpectate={spectateRoom} error={error} />;
   }
 
   return (
     <Board
       room={room}
       playerIndex={playerIndex}
+      isSpectator={isSpectator}
       onMove={sendMove}
       onRematch={rematch}
       onLeave={leave}

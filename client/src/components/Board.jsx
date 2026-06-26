@@ -17,17 +17,17 @@ const ACTIONS = [
   { id: 'wallV', icon: '▯' },
 ];
 
-export default function Board({ room, playerIndex, onMove, onRematch, onLeave, error, opponentLeft }) {
+export default function Board({ room, playerIndex, isSpectator, onMove, onRematch, onLeave, error, opponentLeft }) {
   const [mode, setMode] = useState('move');
   const [view, setView] = useState('board');
   const [hover, setHover] = useState(null);
-  const toggleView = () => setView(v => v === 'board' ? 'fp' : 'board');
+  const toggleView = () => !isSpectator && setView(v => v === 'board' ? 'fp' : 'board');
 
-  const { state, started, players, code, rematchReady } = room;
-  const myTurn = started && state.turn === playerIndex && state.winner === null;
-  const wallsLeft = started ? state.wallsLeft[playerIndex] : 0;
+  const { state, started, players, spectators, code, rematchReady } = room;
+  const myTurn = !isSpectator && started && state.turn === playerIndex && state.winner === null;
+  const wallsLeft = !isSpectator && started ? state.wallsLeft[playerIndex] : 0;
   const moves = myTurn && mode === 'move' ? legalPawnMoves(state, playerIndex) : [];
-  const iRematched = rematchReady?.[playerIndex];
+  const iRematched = !isSpectator && rematchReady?.[playerIndex];
 
   useEffect(() => {
     if (state && state.winner !== null) {
@@ -85,7 +85,9 @@ export default function Board({ room, playerIndex, onMove, onRematch, onLeave, e
           <BoardScene
             state={state}
             playerIndex={playerIndex}
+            isSpectator={isSpectator}
             names={players}
+            spectatorNames={spectators || []}
             mode={mode}
             view={view}
             legalSet={legalSet}
@@ -101,28 +103,33 @@ export default function Board({ room, playerIndex, onMove, onRematch, onLeave, e
 
       <div className="hud-top">
         <div className="hud-left-group">
-          <button className="hud-pill" onClick={toggleView}>
-            {view === 'board' ? 'Board' : 'Person'}
-          </button>
+          {!isSpectator && (
+            <button className="hud-pill" onClick={toggleView}>
+              {view === 'board' ? 'Board' : 'Person'}
+            </button>
+          )}
           <span className="hud-room">{code}</span>
+          {isSpectator && <span className="hud-pill spectating">Spectating</span>}
           <button className="hud-pill" onClick={onLeave}>Leave</button>
         </div>
       </div>
 
-      <div className="hud-panel">
-        <div className="hud-panel-row">
-          {ACTIONS.map((a) => (
-            <button
-              key={a.id}
-              className={`hud-action-btn ${mode === a.id ? 'sel' : ''}`}
-              onClick={() => a.id === 'move' ? setMode('move') : chooseWall(a.id)}
-              disabled={a.id !== 'move' && (!myTurn || wallsLeft === 0)}
-            >
-              <span className="icon">{a.icon}</span>
-          </button>
-          ))}
+      {!isSpectator && (
+        <div className="hud-panel">
+          <div className="hud-panel-row">
+            {ACTIONS.map((a) => (
+              <button
+                key={a.id}
+                className={`hud-action-btn ${mode === a.id ? 'sel' : ''}`}
+                onClick={() => a.id === 'move' ? setMode('move') : chooseWall(a.id)}
+                disabled={a.id !== 'move' && (!myTurn || wallsLeft === 0)}
+              >
+                <span className="icon">{a.icon}</span>
+            </button>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       <Chat playerIndex={playerIndex} code={code} />
 
@@ -139,6 +146,11 @@ export default function Board({ room, playerIndex, onMove, onRematch, onLeave, e
               </div>
             );
           })}
+          {spectators?.length > 0 && (
+            <div className="hud-player spec-count">
+              <span className="hud-pname">👁 {spectators.length}</span>
+            </div>
+          )}
         </div>
       )}
 

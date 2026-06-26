@@ -19,6 +19,7 @@ export function createRoom(host, playerCount = 2) {
     code,
     playerCount: pc,
     players: [host],
+    spectators: [],
     state: null,
     started: false,
     rematchReady: Array.from({ length: pc }, () => false),
@@ -71,9 +72,23 @@ export function removeRoom(code) {
   rooms.delete(code);
 }
 
+export function joinAsSpectator(code, socket, name) {
+  const room = rooms.get(code);
+  if (!room) return { error: 'Room not found' };
+  room.spectators.push({ id: socket.id, name });
+  return { room, spectatorIndex: room.spectators.length - 1 };
+}
+
+export function removeSpectator(code, socketId) {
+  const room = rooms.get(code);
+  if (!room) return;
+  room.spectators = room.spectators.filter((s) => s.id !== socketId);
+}
+
 export function findRoomBySocket(socketId) {
   for (const room of rooms.values()) {
     if (room.players.some((p) => p.id === socketId)) return room;
+    if (room.spectators.some((s) => s.id === socketId)) return room;
   }
   return null;
 }

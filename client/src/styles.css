@@ -218,6 +218,14 @@ body {
   background: rgba(255, 255, 255, 0.1);
   border-color: rgba(255, 255, 255, 0.2);
 }
+.lobby-join-btn.spectate {
+  padding: 11px 14px;
+  font-size: 16px;
+}
+.lobby-join-btn.spectate:hover {
+  background: rgba(108, 92, 231, 0.15);
+  border-color: var(--accent);
+}
 .lobby-error {
   color: var(--bad);
   font-size: 13px;
@@ -338,6 +346,11 @@ input:focus { border-color: var(--accent); }
 }
 .hud-pill:hover { color: var(--text); }
 .hud-pill.sel { background: rgba(108, 92, 231, 0.35); color: #fff; }
+.hud-pill.spectating {
+  background: rgba(108, 92, 231, 0.2);
+  border-color: var(--accent);
+  color: var(--accent);
+}
 .hud-pill:disabled { opacity: 0.25; cursor: not-allowed; }
 
 .hud-action-btn {
@@ -416,6 +429,10 @@ input:focus { border-color: var(--accent); }
   border-radius: 8px;
   font-size: 12px;
   backdrop-filter: blur(4px);
+}
+.hud-player.spec-count {
+  border-color: rgba(255, 255, 255, 0.08);
+  font-size: 11px;
 }
 .hud-player.turn {
   border-color: var(--accent);

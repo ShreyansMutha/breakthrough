@@ -12,6 +12,8 @@ import {
   resetRoom,
   removeRoom,
   findRoomBySocket,
+  joinAsSpectator,
+  removeSpectator,
 } from './rooms.js';
 import { applyMove, initialState } from './quoridor.js';
 
@@ -29,6 +31,7 @@ function publicState(room) {
     playerCount: room.playerCount,
     started: room.started,
     players: room.players.map((p) => p.name),
+    spectators: room.spectators.map((s) => s.name),
     state: room.state,
     rematchReady: room.rematchReady || Array.from({ length: room.playerCount || 2 }, () => false),
   };
@@ -125,13 +128,32 @@ io.on('connection', (socket) => {
     broadcast(room);
   });
 
+  socket.on('joinAsSpectator', ({ name, code } = {}, cb) => {
+    const normalized = (code || '').toUpperCase().trim();
+    const cleanName = name?.trim() || 'Spectator';
+    const res = joinAsSpectator(normalized, socket, cleanName);
+    if (res.error) return cb?.({ ok: false, error: res.error });
+    socket.join(normalized);
+    socket.data.code = normalized;
+    socket.data.isSpectator = true;
+    cb?.({ ok: true, spectatorIndex: res.spectatorIndex, ...publicState(res.room) });
+    broadcast(res.room);
+  });
+
   socket.on('chatMessage', ({ code, text } = {}) => {
     const room = getRoom(code);
     if (!room) return;
-    const pi = socket.data.playerIndex;
-    if (pi === undefined) return;
-    const name = room.players[pi]?.name || 'Unknown';
-    io.to(code).emit('chatMessage', { playerIndex: pi, name, text: text?.trim()?.slice(0, 200) });
+    const text2 = text?.trim()?.slice(0, 200);
+    if (!text2) return;
+    if (socket.data.isSpectator) {
+      const spec = room.spectators.find((s) => s.id === socket.id);
+      io.to(code).emit('chatMessage', { playerIndex: -1, name: spec?.name || 'Spectator', text: text2 });
+    } else {
+      const pi = socket.data.playerIndex;
+      if (pi === undefined) return;
+      const name = room.players[pi]?.name || 'Unknown';
+      io.to(code).emit('chatMessage', { playerIndex: pi, name, text: text2 });
+    }
   });
 
   socket.on('disconnect', () => {
@@ -139,36 +161,37 @@ io.on('connection', (socket) => {
     if (!room) return;
 
     const pi = room.players.findIndex(p => p.id === socket.id);
-    if (pi === -1) return;
+    if (pi !== -1) {
+      if (room.state) {
+        room.state.disconnected[pi] = true;
+        io.to(room.code).emit('opponentLeft');
 
-    if (room.state) {
-      room.state.disconnected[pi] = true;
-
-      io.to(room.code).emit('opponentLeft');
-
-      if (room.state.winner === null) {
-        let next = room.state.turn;
-        if (next === pi) {
-          next = (pi + 1) % room.state.playerCount;
-          while (room.state.disconnected[next] && next !== pi) {
-            next = (next + 1) % room.state.playerCount;
+        if (room.state.winner === null) {
+          let next = room.state.turn;
+          if (next === pi) {
+            next = (pi + 1) % room.state.playerCount;
+            while (room.state.disconnected[next] && next !== pi) {
+              next = (next + 1) % room.state.playerCount;
+            }
+            room.state.turn = next;
           }
-          room.state.turn = next;
         }
       }
+      broadcast(room);
+
+      setTimeout(() => {
+        const stillHasPlayers = room.players.some((p) => {
+          const s = io.sockets.sockets.get(p.id);
+          return s && s.connected;
+        });
+        if (!stillHasPlayers) {
+          removeRoom(room.code);
+        }
+      }, 30000);
+    } else {
+      removeSpectator(room.code, socket.id);
+      broadcast(room);
     }
-
-    broadcast(room);
-
-    setTimeout(() => {
-      const stillHasPlayers = room.players.some((p) => {
-        const s = io.sockets.sockets.get(p.id);
-        return s && s.connected;
-      });
-      if (!stillHasPlayers) {
-        removeRoom(room.code);
-      }
-    }, 30000);
   });
 });
 

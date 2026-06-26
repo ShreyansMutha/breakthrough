@@ -408,10 +408,85 @@ function Celebration({ pawn, color, half, unit }) {
   );
 }
 
+function SeatedFigure({ name }) {
+  return (
+    <group position={[0, 0.35, 0]}>
+      <mesh position={[0, 0.2, 0]} castShadow>
+        <capsuleGeometry args={[0.12, 0.2, 4, 8]} />
+        <meshStandardMaterial color="#64748b" roughness={0.6} />
+      </mesh>
+      <mesh position={[0, 0.42, 0]} castShadow>
+        <sphereGeometry args={[0.1, 8, 8]} />
+        <meshStandardMaterial color="#64748b" roughness={0.5} />
+      </mesh>
+      {name && (
+        <Html position={[0, 0.6, 0]} center distanceFactor={8} style={{ pointerEvents: 'none' }}>
+          <div className="board-nametag">{name}</div>
+        </Html>
+      )}
+    </group>
+  );
+}
+
+function StadiumSeating({ size, half, spectatorNames }) {
+  const parts = [];
+  const seatW = 0.7;
+  const seatD = 0.5;
+  const seatH = 0.12;
+  const rows = 5;
+  const pitch = 0.8;
+  const startDist = half + 3.5;
+  const colors = ['#1e2740', '#232b45', '#28304a', '#2d3550', '#323b5a'];
+
+  const sideConfigs = [
+    { dx: 0, dz: -1, sx: size, rot: 0 },
+    { dx: 0, dz: 1, sx: size, rot: Math.PI },
+    { dx: 1, dz: 0, sx: size, rot: -Math.PI / 2 },
+    { dx: -1, dz: 0, sx: size, rot: Math.PI / 2 },
+  ];
+
+  let key = 0;
+  let figIdx = 0;
+  const total = spectatorNames?.length || 0;
+  for (const { dx, dz, sx, rot } of sideConfigs) {
+    for (let row = 0; row < rows; row++) {
+      const dist = startDist + row * pitch;
+      const count = Math.floor((sx * 0.85) / seatW);
+      const totalW = count * seatW;
+      const startX = -totalW / 2 + seatW / 2;
+      for (let i = 0; i < count; i++) {
+        const offX = startX + i * seatW;
+        const x = dx === 0 ? offX : dist * dx;
+        const z = dz === 0 ? offX : dist * dz;
+        const y = row * 0.35;
+        const showFig = figIdx < total && row < 3 && (figIdx % 2 === 0 || i % 3 === 0);
+        const name = showFig ? spectatorNames[figIdx] : null;
+        if (showFig) figIdx++;
+        parts.push(
+          <group key={key++} position={[x, y, z]} rotation={[0, rot, 0]}>
+            <mesh position={[0, 0, 0]} castShadow>
+              <boxGeometry args={[seatW * 0.9, seatH, seatD]} />
+              <meshStandardMaterial color={colors[row % colors.length]} roughness={0.9} />
+            </mesh>
+            <mesh position={[0, 0.25, -0.15]} castShadow>
+              <boxGeometry args={[seatW * 0.8, 0.35, seatD * 0.4]} />
+              <meshStandardMaterial color="#1a2032" roughness={0.95} />
+            </mesh>
+            {name && <SeatedFigure name={name} />}
+          </group>
+        );
+      }
+    }
+  }
+  return <group>{parts}</group>;
+}
+
 export default function BoardScene({
   state,
   playerIndex,
+  isSpectator,
   names,
+  spectatorNames,
   mode,
   view,
   legalSet,
@@ -455,6 +530,8 @@ export default function BoardScene({
         <boxGeometry args={[span + boardPadding, 0.5, span + boardPadding]} />
         <meshStandardMaterial color="#1c2336" roughness={0.7} metalness={0.15} />
       </mesh>
+
+      <StadiumSeating size={size} half={half} spectatorNames={spectatorNames} />
 
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.59, 0]} receiveShadow>
         <planeGeometry args={[shadowCam * 2.5, shadowCam * 2.5]} />
@@ -543,7 +620,7 @@ export default function BoardScene({
         />
       )}
 
-      {firstPerson ? (
+      {firstPerson && !isSpectator ? (
         <FollowControls pawn={pawns[playerIndex]} half={half} unit={unit} />
       ) : (
         <OrbitControls

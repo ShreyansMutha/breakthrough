@@ -14,7 +14,7 @@ function randomName() {
   return RANDOM_NAMES[Math.floor(Math.random() * RANDOM_NAMES.length)];
 }
 
-export default function Lobby({ onCreate, onJoin, error }) {
+export default function Lobby({ onCreate, onJoin, onSpectate, error }) {
   const [name, setName] = useState(randomName);
   const [code, setCode] = useState('');
   const [playerCount, setPlayerCount] = useState(2);
@@ -72,6 +72,9 @@ export default function Lobby({ onCreate, onJoin, error }) {
             />
             <button className="lobby-join-btn" onClick={() => onJoin(name, code)}>
               Join
+            </button>
+            <button className="lobby-join-btn spectate" onClick={() => onSpectate?.(name, code)}>
+              👁
             </button>
           </div>
         </div>
