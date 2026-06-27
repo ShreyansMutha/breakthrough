@@ -941,6 +941,99 @@ input:focus { border-color: var(--accent); }
   }
 }
 
+/* ---- Bot UI ---- */
+.bot-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 14px 0;
+}
+.bot-list-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: var(--panel-2);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 14px;
+  font-weight: 600;
+}
+.bot-list-item.empty {
+  border: 1px dashed rgba(255, 255, 255, 0.15);
+  background: transparent;
+  color: var(--muted);
+  font-weight: 400;
+  font-size: 13px;
+}
+.bot-badge {
+  font-size: 12px;
+  background: rgba(108, 92, 231, 0.2);
+  padding: 2px 8px;
+  border-radius: 6px;
+  color: #c4b5fd;
+  text-transform: capitalize;
+}
+.bot-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 6px 0 4px;
+}
+.bot-diff-toggle {
+  display: flex;
+  gap: 4px;
+  justify-content: center;
+}
+.diff-pill {
+  padding: 5px 12px;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.diff-pill:hover {
+  color: var(--text);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+.diff-pill.on {
+  background: rgba(108, 92, 231, 0.2);
+  color: #c4b5fd;
+  border-color: rgba(108, 92, 231, 0.4);
+}
+.bot-add-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 10px;
+  border: 1px dashed rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.bot-add-btn:hover {
+  background: rgba(108, 92, 231, 0.08);
+  color: #c4b5fd;
+  border-color: rgba(108, 92, 231, 0.3);
+}
+.bot-add-plus {
+  font-size: 16px;
+  font-weight: 700;
+}
+.bot-badge-sm {
+  font-size: 12px;
+  margin-left: 4px;
+}
+
 /* Bigger tap targets on touch devices */
 @media (hover: none) {
   .btn { padding: 13px 18px; }

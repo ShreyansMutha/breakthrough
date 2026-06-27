@@ -20,14 +20,15 @@ const ACTIONS = [
   { id: 'wallV', icon: '┃' },
 ];
 
-export default function Board({ room, playerIndex, isSpectator, onMove, onRematch, onLeave, error, opponentLeft }) {
+export default function Board({ room, playerIndex, isSpectator, onMove, onRematch, onLeave, onAddBot, error, opponentLeft }) {
   const [mode, setMode] = useState('move');
   const [view, setView] = useState('board');
   const [hover, setHover] = useState(null);
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
+  const [botDifficulty, setBotDifficulty] = useState('easy');
   const toggleView = () => !isSpectator && setView(v => v === 'board' ? 'fp' : 'board');
 
-  const { state, started, players, spectators, code, rematchReady } = room;
+  const { state, started, players, spectators, code, rematchReady, botPlayers } = room;
   const myTurn = !isSpectator && started && state.turn === playerIndex && state.winner === null;
   const wallsLeft = !isSpectator && started ? state.wallsLeft[playerIndex] : 0;
   const moves = myTurn && mode === 'move' ? legalPawnMoves(state, playerIndex) : [];
@@ -63,15 +64,46 @@ export default function Board({ room, playerIndex, isSpectator, onMove, onRematc
 
   if (!started) {
     const need = state ? state.playerCount : (room.playerCount || 2);
-    const waiting = `Waiting for players (${players.length}/${need})…`;
+    const isBot = (i) => botPlayers?.some((b) => b.name === players[i]);
+    const fillSlots = need - players.length;
     return (
       <div className="screen">
         <div className="panel center">
           <h1 className="title">Breakthrough</h1>
-          <p className="tagline">{waiting}</p>
-          <p className="tagline">Share this code so friends can join:</p>
+          <p className="tagline">Waiting room — share this code so friends can join:</p>
           <div className="code-badge">{code}</div>
-          <button className="btn" onClick={onLeave}>Leave</button>
+          <div className="bot-list">
+            {players.map((name, i) => (
+              <div key={i} className="bot-list-item">
+                <span>{name}</span>
+                {isBot(i) && <span className="bot-badge">🤖 {botPlayers.find((b) => b.name === name)?.difficulty}</span>}
+              </div>
+            ))}
+            {Array.from({ length: fillSlots }, (_, i) => (
+              <div key={`empty-${i}`} className="bot-list-item empty">
+                <span className="bot-slot-label">Empty slot</span>
+              </div>
+            ))}
+          </div>
+          {fillSlots > 0 && playerIndex === 0 && (
+            <div className="bot-controls">
+              <div className="bot-diff-toggle">
+                {['easy', 'medium', 'hard'].map((d) => (
+                  <button
+                    key={d}
+                    className={`diff-pill${botDifficulty === d ? ' on' : ''}`}
+                    onClick={() => setBotDifficulty(d)}
+                  >
+                    {d === 'easy' ? 'Easy' : d === 'medium' ? 'Medium' : 'Hard'}
+                  </button>
+                ))}
+              </div>
+              <button className="bot-add-btn" onClick={() => onAddBot(botDifficulty)}>
+                <span className="bot-add-plus">+</span> Add Bot
+              </button>
+            </div>
+          )}
+          <button className="btn" style={{ marginTop: 12 }} onClick={onLeave}>Leave</button>
         </div>
       </div>
     );
@@ -165,10 +197,14 @@ export default function Board({ room, playerIndex, isSpectator, onMove, onRematc
           {players.map((name, i) => {
             const clr = COLORS[i % COLORS.length];
             const left = state.disconnected?.[i];
+            const isBotPlayer = botPlayers?.some((b) => b.name === name);
             return (
               <div key={i} className={`hud-player${state.turn === i && !left ? ' turn' : ''}`} style={{ opacity: left ? 0.35 : 1 }}>
                 <span className="hud-swatch" style={{ background: left ? '#64748b' : clr }} />
-                <span className="hud-pname">{left ? `${name} (left)` : name}</span>
+                <span className="hud-pname">
+                  {left ? `${name} (left)` : name}
+                  {isBotPlayer && <span className="bot-badge-sm">🤖</span>}
+                </span>
                 <span className="hud-walls" style={{ color: left ? '#64748b' : 'var(--wall)' }}>{state.wallsLeft?.[i] ?? 0}</span>
               </div>
             );

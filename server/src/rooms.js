@@ -85,6 +85,35 @@ export function removeSpectator(code, socketId) {
   room.spectators = room.spectators.filter((s) => s.id !== socketId);
 }
 
+export function addBotToRoom(code, difficulty) {
+  const room = rooms.get(code);
+  if (!room) return { error: 'Room not found' };
+  if (room.players.length >= room.playerCount) return { error: 'Room is full' };
+  const botNames = { easy: 'Easy Bot', medium: 'Medium Bot', hard: 'Hard Bot' };
+  const bot = {
+    id: `bot-${code}-${room.players.length}-${Date.now()}`,
+    name: botNames[difficulty] || 'Bot',
+    bot: true,
+    botDifficulty: difficulty,
+  };
+  const pi = room.players.length;
+  room.players.push(bot);
+  if (room.players.length === room.playerCount) {
+    room.started = true;
+    room.state = initialState(room.playerCount);
+  }
+  return { playerIndex: pi, room };
+}
+
+export function removeBotForJoin(code) {
+  const room = rooms.get(code);
+  if (!room) return null;
+  const botIdx = room.players.findIndex((p) => p.bot);
+  if (botIdx === -1) return null;
+  const removed = room.players.splice(botIdx, 1);
+  return removed[0];
+}
+
 export function findRoomBySocket(socketId) {
   for (const room of rooms.values()) {
     if (room.players.some((p) => p.id === socketId)) return room;

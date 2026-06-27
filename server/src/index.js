@@ -14,8 +14,10 @@ import {
   findRoomBySocket,
   joinAsSpectator,
   removeSpectator,
+  addBotToRoom,
+  removeBotForJoin,
 } from './rooms.js';
-import { applyMove, initialState } from './quoridor.js';
+import { applyMove, initialState, getBotMove } from './quoridor.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -31,10 +33,32 @@ function publicState(room) {
     playerCount: room.playerCount,
     started: room.started,
     players: room.players.map((p) => p.name),
+    botPlayers: room.players.filter((p) => p.bot).map((p) => ({ name: p.name, difficulty: p.botDifficulty })),
     spectators: room.spectators.map((s) => s.name),
     state: room.state,
     rematchReady: room.rematchReady || Array.from({ length: room.playerCount || 2 }, () => false),
   };
+}
+
+function scheduleBotTurn(room) {
+  if (!room.state || room.state.winner !== null) return;
+  const pi = room.state.turn;
+  const player = room.players[pi];
+  if (!player || !player.bot) return;
+
+  const delays = { easy: 2000, medium: 1500, hard: 1000 };
+  const delay = delays[player.botDifficulty] || 1500;
+
+  setTimeout(() => {
+    if (!room.state || room.state.winner !== null) return;
+    if (room.state.turn !== pi) return;
+    const move = getBotMove(room.state, pi, player.botDifficulty);
+    if (!move) return;
+    const result = applyMove(room.state, pi, move);
+    if (!result.ok) return;
+    broadcast(room);
+    scheduleBotTurn(room);
+  }, delay);
 }
 
 function broadcast(room) {
@@ -60,6 +84,10 @@ io.on('connection', (socket) => {
     const cleanName = name?.trim() || 'Player';
     if (room.players.some((p) => p.name === cleanName))
       return cb?.({ ok: false, error: 'Name already taken' });
+    if (room.players.length >= room.playerCount) {
+      const removed = removeBotForJoin(normalized);
+      if (!removed) return cb?.({ ok: false, error: 'Room is full' });
+    }
     const res = joinRoom(normalized, { id: socket.id, name: cleanName });
     if (res.error) return cb?.({ ok: false, error: res.error });
     socket.join(normalized);
@@ -67,6 +95,7 @@ io.on('connection', (socket) => {
     socket.data.playerIndex = res.playerIndex;
     cb?.({ ok: true, playerIndex: res.playerIndex, ...publicState(res.room) });
     broadcast(res.room);
+    if (res.room.started) scheduleBotTurn(res.room);
   });
 
   socket.on('rejoin', ({ name, code } = {}, cb) => {
@@ -85,6 +114,19 @@ io.on('connection', (socket) => {
     broadcast(room);
   });
 
+  socket.on('addBot', ({ code, difficulty = 'easy' } = {}, cb) => {
+    const room = getRoom(code);
+    if (!room) return cb?.({ ok: false, error: 'Room not found' });
+    if (room.started) return cb?.({ ok: false, error: 'Game already started' });
+    if (room.players.length >= room.playerCount)
+      return cb?.({ ok: false, error: 'Room is full' });
+    const res = addBotToRoom(code, difficulty);
+    if (res.error) return cb?.({ ok: false, error: res.error });
+    cb?.({ ok: true });
+    broadcast(res.room);
+    if (res.room.started) scheduleBotTurn(res.room);
+  });
+
   socket.on('move', ({ code, move } = {}, cb) => {
     const room = getRoom(code);
     if (!room) return cb?.({ ok: false, error: 'Room not found' });
@@ -98,6 +140,7 @@ io.on('connection', (socket) => {
 
     cb?.({ ok: true });
     broadcast(room);
+    scheduleBotTurn(room);
   });
 
   socket.on('rematch', ({ code } = {}) => {
@@ -108,7 +151,9 @@ io.on('connection', (socket) => {
     if (!room.rematchReady) room.rematchReady = Array.from({ length: room.playerCount }, () => false);
     room.rematchReady[pi] = true;
 
+    const isBot = (i) => room.players[i]?.bot;
     const allReady = room.players.every((p, i) => {
+      if (isBot(i)) return true;
       const s = io.sockets.sockets.get(p.id);
       const connected = s && s.connected;
       return !connected || room.rematchReady[i];
@@ -124,6 +169,8 @@ io.on('connection', (socket) => {
       while (room.state.disconnected[t] && t < room.state.playerCount) t++;
       if (t < room.state.playerCount) room.state.turn = t;
       room.rematchReady = Array.from({ length: room.playerCount }, () => false);
+      broadcast(room);
+      scheduleBotTurn(room);
     }
     broadcast(room);
   });
@@ -184,6 +231,7 @@ io.on('connection', (socket) => {
 
     const pi = room.players.findIndex(p => p.id === socket.id);
     if (pi !== -1) {
+      if (room.players[pi]?.bot) return;
       if (room.voiceParticipants) room.voiceParticipants.delete(pi);
       io.to(room.code).emit('voice-left', { from: pi });
       if (room.state) {
@@ -194,17 +242,21 @@ io.on('connection', (socket) => {
           let next = room.state.turn;
           if (next === pi) {
             next = (pi + 1) % room.state.playerCount;
-            while (room.state.disconnected[next] && next !== pi) {
+            let safety = 0;
+            while ((room.state.disconnected[next] || room.players[next]?.bot) && next !== pi && safety < room.state.playerCount) {
               next = (next + 1) % room.state.playerCount;
+              safety++;
             }
             room.state.turn = next;
           }
         }
       }
       broadcast(room);
+      scheduleBotTurn(room);
 
       setTimeout(() => {
         const stillHasPlayers = room.players.some((p) => {
+          if (p.bot) return true;
           const s = io.sockets.sockets.get(p.id);
           return s && s.connected;
         });

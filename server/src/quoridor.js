@@ -231,3 +231,150 @@ export function applyMove(state, pi, move) {
   }
   return { ok: true };
 }
+
+function shortestPath(walls, startR, startC, goalR, goalC, size, playerCount) {
+  const wset = wallSet(walls);
+  const visited = new Set();
+  const queue = [{ r: startR, c: startC, dist: 0 }];
+  while (queue.length) {
+    const { r, c, dist } = queue.shift();
+    if (r === goalR || c === goalC) return dist;
+    const key = `${r},${c}`;
+    if (visited.has(key)) continue;
+    visited.add(key);
+    for (const [dr, dc] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) {
+      const nr = r + dr, nc = c + dc;
+      if (!inBounds(nr, nc, size)) continue;
+      if (isBlocked(wset, r, c, nr, nc)) continue;
+      if (playerCount > 2 && isCornerTile(nr, nc, playerCount)) continue;
+      if (!visited.has(`${nr},${nc}`)) queue.push({ r: nr, c: nc, dist: dist + 1 });
+    }
+  }
+  return Infinity;
+}
+
+function getLegalWallMoves(state) {
+  const { size } = state;
+  const moves = [];
+  for (let r = 0; r < size - 1; r++) {
+    for (let c = 0; c < size - 1; c++) {
+      for (const orientation of ['H', 'V']) {
+        if (canPlaceWall(state, orientation, r, c)) {
+          moves.push({ type: 'wall', orientation, r, c });
+        }
+      }
+    }
+  }
+  return moves;
+}
+
+function wallBlockScore(w, state, pi) {
+  const opp = state.pawns[pi];
+  const side = playerSide(pi, state.playerCount);
+  const dr = Math.abs(w.r - opp.r), dc = Math.abs(w.c - opp.c);
+  switch (side) {
+    case 0:
+      if (w.orientation === 'H' && w.r >= opp.r && dr <= 3 && dc <= 2) return (4 - dr - dc * 0.5) * 2;
+      if (w.orientation === 'V' && dr <= 1 && w.c <= opp.c + 1 && w.c >= opp.c - 1) return 2;
+      return 0;
+    case 1:
+      if (w.orientation === 'V' && w.c <= opp.c && dc <= 3 && dr <= 2) return (4 - dc - dr * 0.5) * 2;
+      if (w.orientation === 'H' && dc <= 1 && w.r >= opp.r - 1 && w.r <= opp.r + 1) return 2;
+      return 0;
+    case 2:
+      if (w.orientation === 'H' && w.r <= opp.r && dr <= 3 && dc <= 2) return (4 - dr - dc * 0.5) * 2;
+      if (w.orientation === 'V' && dr <= 1 && w.c <= opp.c + 1 && w.c >= opp.c - 1) return 2;
+      return 0;
+    case 3:
+      if (w.orientation === 'V' && w.c >= opp.c && dc <= 3 && dr <= 2) return (4 - dc - dr * 0.5) * 2;
+      if (w.orientation === 'H' && dc <= 1 && w.r >= opp.r - 1 && w.r <= opp.r + 1) return 2;
+      return 0;
+  }
+}
+
+function wallConnectsToEdgeOrWall(w, state) {
+  const { size, walls } = state;
+  const wset = wallSet(walls);
+  let connections = 0;
+  if (w.orientation === 'H') {
+    if (w.c === 0 || w.c === size - 2) connections += 2;
+    if (wset.has(`H,${w.r},${w.c - 1}`)) connections++;
+    if (wset.has(`H,${w.r},${w.c + 1}`)) connections++;
+    if (wset.has(`V,${w.r},${w.c}`) || wset.has(`V,${w.r - 1},${w.c}`)) connections++;
+    if (wset.has(`V,${w.r},${w.c + 1}`) || wset.has(`V,${w.r - 1},${w.c + 1}`)) connections++;
+  } else {
+    if (w.r === 0 || w.r === size - 2) connections += 2;
+    if (wset.has(`V,${w.r - 1},${w.c}`)) connections++;
+    if (wset.has(`V,${w.r + 1},${w.c}`)) connections++;
+    if (wset.has(`H,${w.r},${w.c}`) || wset.has(`H,${w.r},${w.c - 1}`)) connections++;
+    if (wset.has(`H,${w.r + 1},${w.c}`) || wset.has(`H,${w.r + 1},${w.c - 1}`)) connections++;
+  }
+  return connections;
+}
+
+function findBestWall(state, pi, difficulty) {
+  const walls = getLegalWallMoves(state);
+  if (!walls.length) return null;
+  const gr = goalRow(pi, state.playerCount);
+  const gc = goalCol(pi, state.playerCount);
+
+  let bestWall = null, bestScore = -Infinity;
+  for (const w of walls) {
+    const testWalls = [...state.walls, { orientation: w.orientation, r: w.r, c: w.c }];
+    const myDist = shortestPath(testWalls, state.pawns[pi].r, state.pawns[pi].c, gr, gc, state.size, state.playerCount);
+    if (myDist === Infinity) continue;
+
+    let score = 0;
+    const connects = wallConnectsToEdgeOrWall(w, state);
+    score += connects * 2;
+
+    for (let i = 0; i < state.playerCount; i++) {
+      if (i === pi) continue;
+      const block = wallBlockScore(w, state, i);
+      score += block;
+      if (difficulty !== 'easy') {
+        const orig = shortestPath(state.walls, state.pawns[i].r, state.pawns[i].c, goalRow(i, state.playerCount), goalCol(i, state.playerCount), state.size, state.playerCount);
+        const after = shortestPath(testWalls, state.pawns[i].r, state.pawns[i].c, goalRow(i, state.playerCount), goalCol(i, state.playerCount), state.size, state.playerCount);
+        score += (after - orig) * 1.5;
+      }
+    }
+
+    const myOrig = shortestPath(state.walls, state.pawns[pi].r, state.pawns[pi].c, gr, gc, state.size, state.playerCount);
+    const myPenalty = Math.max(0, myDist - myOrig);
+    score -= myPenalty;
+    score += Math.random() * (difficulty === 'easy' ? 4 : difficulty === 'medium' ? 2 : 0.5);
+
+    if (score > bestScore) { bestScore = score; bestWall = w; }
+  }
+
+  if (!bestWall) return null;
+  return bestWall;
+}
+
+function findBestPawnMove(state, pi) {
+  const pawnMoves = legalPawnMoves(state, pi);
+  if (!pawnMoves.length) return null;
+  const gr = goalRow(pi, state.playerCount);
+  const gc = goalCol(pi, state.playerCount);
+  const best = pawnMoves.reduce((best, m) => {
+    const dist = shortestPath(state.walls, m.r, m.c, gr, gc, state.size, state.playerCount);
+    if (!best || dist < best.dist) return { ...m, dist };
+    return best;
+  }, null);
+  return { type: 'pawn', r: best.r, c: best.c };
+}
+
+export function getBotMove(state, pi, difficulty) {
+  if (state.wallsLeft[pi] > 0) {
+    const wall = findBestWall(state, pi, difficulty);
+    if (wall && (difficulty === 'hard' || difficulty === 'medium' || (difficulty === 'easy' && Math.random() < 0.75))) {
+      if (difficulty === 'easy') {
+        const blockScore = Math.max(...Array.from({ length: state.playerCount }, (_, i) => i === pi ? 0 : wallBlockScore(wall, state, i)));
+        if (blockScore > 0 || Math.random() < 0.4) return wall;
+      } else {
+        return wall;
+      }
+    }
+  }
+  return findBestPawnMove(state, pi);
+}

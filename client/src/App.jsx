@@ -130,6 +130,12 @@ export default function App() {
     socket.emit('rematch', { code: room.code });
   };
 
+  const addBot = (difficulty) => {
+    socket.emit('addBot', { code: room.code, difficulty }, (res) => {
+      if (!res.ok) setError(res.error || 'Could not add bot');
+    });
+  };
+
   const leave = () => {
     setRoom(null);
     setPlayerIndex(null);
@@ -166,6 +172,7 @@ export default function App() {
       onMove={sendMove}
       onRematch={rematch}
       onLeave={leave}
+      onAddBot={addBot}
       error={error}
       opponentLeft={opponentLeft}
     />
