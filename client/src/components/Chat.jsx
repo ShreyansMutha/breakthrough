@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { socket } from '../socket';
 import { COLORS } from '../quoridor';
+import { playChat } from '../sfx';
 
 export default function Chat({ playerIndex, code }) {
   const [open, setOpen] = useState(false);
@@ -12,6 +13,7 @@ export default function Chat({ playerIndex, code }) {
   useEffect(() => {
     const handler = (msg) => {
       setMessages((prev) => [...prev, msg]);
+      if (msg.playerIndex !== playerIndex) playChat();
       if (!open) setUnread((n) => n + 1);
     };
     socket.on('chatMessage', handler);

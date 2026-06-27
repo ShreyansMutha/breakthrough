@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { legalPawnMoves, canPlaceWall, COLORS, playerSide } from '../quoridor';
 import confetti from 'canvas-confetti';
 import { initVoice, destroyVoice } from '../voice';
+import { playMove, playWall, playWin, playGameStart } from '../sfx';
 
 function wallOrientation(mode, pi, pc) {
   const side = playerSide(pi, pc);
@@ -34,18 +35,29 @@ export default function Board({ room, playerIndex, isSpectator, onMove, onRematc
   useEffect(() => {
     if (started && playerIndex !== null && code) {
       initVoice(code, playerIndex, state.playerCount);
+      playGameStart();
     }
     return () => destroyVoice();
   }, [started, playerIndex]);
 
   useEffect(() => {
     if (state && state.winner !== null) {
+      playWin();
       confetti({ particleCount: 80, spread: 70, origin: { y: 0.6 } });
       confetti({ particleCount: 60, spread: 90, origin: { y: 0.6, x: 0.2 } });
       confetti({ particleCount: 60, spread: 90, origin: { y: 0.6, x: 0.8 } });
       const id = setTimeout(() => confetti({ particleCount: 40, spread: 60, origin: { y: 0.4 } }), 600);
       return () => clearTimeout(id);
     }
+  }, [state?.winner]);
+
+  const prevWinner = useRef(null);
+  useEffect(() => {
+    if (!state) return;
+    if (prevWinner.current !== null && state.winner === null) {
+      playGameStart();
+    }
+    prevWinner.current = state.winner;
   }, [state?.winner]);
 
   if (!started) {
@@ -69,12 +81,15 @@ export default function Board({ room, playerIndex, isSpectator, onMove, onRematc
   const wallValid = !!hover && wallsLeft > 0 && canPlaceWall(state, orientation, hover.r, hover.c);
 
   const handleCellClick = (r, c) => {
-    if (myTurn && mode === 'move' && legalSet.has(`${r},${c}`))
+    if (myTurn && mode === 'move' && legalSet.has(`${r},${c}`)) {
+      playMove();
       onMove({ type: 'pawn', r, c });
+    }
   };
   const handleWallPlace = (r, c) => {
     if (!myTurn || mode === 'move') return;
     if (wallsLeft > 0 && canPlaceWall(state, orientation, r, c)) {
+      playWall();
       onMove({ type: 'wall', orientation, r, c });
       setHover(null);
     }
