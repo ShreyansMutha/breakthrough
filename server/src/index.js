@@ -164,12 +164,21 @@ io.on('connection', (socket) => {
     socket.to(code).emit('voice-signal', { from, to, data });
   });
 
+  socket.on('voice-join', ({ code } = {}) => {
+    const room = getRoom(code);
+    if (!room) return;
+    const from = socket.data.playerIndex;
+    if (from === undefined) return;
+    socket.to(code).emit('voice-joined', { from });
+  });
+
   socket.on('disconnect', () => {
     const room = findRoomBySocket(socket.id);
     if (!room) return;
 
     const pi = room.players.findIndex(p => p.id === socket.id);
     if (pi !== -1) {
+      io.to(room.code).emit('voice-left', { from: pi });
       if (room.state) {
         room.state.disconnected[pi] = true;
         io.to(room.code).emit('opponentLeft');

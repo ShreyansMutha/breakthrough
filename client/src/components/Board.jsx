@@ -32,9 +32,11 @@ export default function Board({ room, playerIndex, isSpectator, onMove, onRematc
   const iRematched = !isSpectator && rematchReady?.[playerIndex];
 
   useEffect(() => {
-    if (started && playerIndex !== null) { initVoice(code, playerIndex, state.playerCount); }
+    if (started && playerIndex !== null && code) {
+      initVoice(code, playerIndex, state.playerCount);
+    }
     return () => destroyVoice();
-  }, [started]);
+  }, [started, playerIndex]);
 
   useEffect(() => {
     if (state && state.winner !== null) {
