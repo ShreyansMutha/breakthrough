@@ -3,11 +3,14 @@ import { socket } from './socket';
 let localStream = null;
 let peerConnections = {};
 let peerAudio = {};
-let _micEnabled = true;
+let _micEnabled = false;
 let _speakerEnabled = true;
 let _listeners = [];
 let _code = '';
 let _myPi = -1;
+let _voiceActivated = false;
+
+const STORAGE_KEY = 'breakthrough_voice_activated';
 
 function notify() {
   _listeners.forEach(fn => fn(getState()));
@@ -28,9 +31,17 @@ export function subscribe(fn) {
   return () => { _listeners = _listeners.filter(f => f !== fn); };
 }
 
-export function toggleMic() {
-  _micEnabled = !_micEnabled;
-  if (localStream) {
+export async function toggleMic() {
+  if (!localStream) {
+    const ok = await activateVoice();
+    if (!ok) {
+      notify();
+      return;
+    }
+    _micEnabled = true;
+    localStream.getAudioTracks().forEach(t => t.enabled = true);
+  } else {
+    _micEnabled = !_micEnabled;
     localStream.getAudioTracks().forEach(t => t.enabled = _micEnabled);
   }
   notify();
@@ -90,21 +101,33 @@ function createPeerConnection(remotePi) {
 }
 
 async function initiateOffer(remotePi) {
+  if (peerConnections[remotePi]) return;
   const pc = createPeerConnection(remotePi);
   const offer = await pc.createOffer();
   await pc.setLocalDescription(offer);
   socket.emit('voice-signal', { code: _code, to: remotePi, data: { type: 'offer', sdp: pc.localDescription } });
 }
 
-export async function initVoice(code, myPi, playerCount) {
-  if (!navigator.mediaDevices?.getUserMedia) return false;
+async function activateVoice() {
+  if (localStream) return true;
+  try {
+    localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+    localStream.getAudioTracks().forEach(t => t.enabled = _micEnabled);
+  } catch {
+    return false;
+  }
+  _voiceActivated = true;
+  localStorage.setItem(STORAGE_KEY, 'true');
+  socket.emit('voice-join', { code: _code });
+  notify();
+  return true;
+}
 
-  _code = code;
-  _myPi = myPi;
-
+function setupSocketListeners() {
   socket.off('voice-signal');
   socket.off('voice-joined');
   socket.off('voice-left');
+  socket.off('voice-room-state');
 
   socket.on('voice-signal', async ({ from, to, data }) => {
     if (to !== _myPi) return;
@@ -128,6 +151,7 @@ export async function initVoice(code, myPi, playerCount) {
 
   socket.on('voice-joined', async ({ from }) => {
     if (from === _myPi) return;
+    if (peerConnections[from]) return;
     if (_myPi < from) {
       await initiateOffer(from);
     } else {
@@ -135,17 +159,40 @@ export async function initVoice(code, myPi, playerCount) {
     }
   });
 
+  socket.on('voice-room-state', ({ participants }) => {
+    for (const pi of participants) {
+      if (pi === _myPi) continue;
+      if (peerConnections[pi]) continue;
+      if (_myPi < pi) {
+        initiateOffer(pi);
+      } else {
+        createPeerConnection(pi);
+      }
+    }
+  });
+
   socket.on('voice-left', ({ from }) => {
     closePeer(from);
   });
+}
 
-  try {
-    localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-  } catch {
-    return false;
+export async function initVoice(code, myPi, playerCount) {
+  if (!navigator.mediaDevices?.getUserMedia) return false;
+
+  _code = code;
+  _myPi = myPi;
+  _voiceActivated = localStorage.getItem(STORAGE_KEY) === 'true';
+
+  setupSocketListeners();
+
+  if (_voiceActivated) {
+    const ok = await activateVoice();
+    if (!ok) {
+      _voiceActivated = false;
+      localStorage.removeItem(STORAGE_KEY);
+    }
   }
 
-  socket.emit('voice-join', { code: _code, pi: _myPi });
   notify();
   return true;
 }
@@ -159,6 +206,7 @@ export function destroyVoice() {
   socket.off('voice-signal');
   socket.off('voice-joined');
   socket.off('voice-left');
+  socket.off('voice-room-state');
   _code = '';
   _myPi = -1;
   notify();

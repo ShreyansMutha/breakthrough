@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { subscribe, toggleMic, toggleSpeaker } from '../voice';
 
 export default function VoiceChat() {
-  const [state, setState] = useState({ supported: false, active: false, micEnabled: true, speakerEnabled: true });
+  const [state, setState] = useState({ supported: false, active: false, micEnabled: false, speakerEnabled: true });
 
   useEffect(() => {
     return subscribe(setState);
@@ -16,9 +16,8 @@ export default function VoiceChat() {
         className={`voice-btn${state.micEnabled ? ' on' : ' off'}`}
         onClick={toggleMic}
         title={state.micEnabled ? 'Mute mic' : 'Unmute mic'}
-        disabled={!state.active}
       >
-        {state.micEnabled ? '🎤' : '🔇'}
+        {state.micEnabled ? '🎤' : (state.active ? '🔇' : '🎤')}
       </button>
       <button
         className={`voice-btn${state.speakerEnabled ? ' on' : ' off'}`}

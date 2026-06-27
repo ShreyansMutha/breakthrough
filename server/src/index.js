@@ -169,6 +169,14 @@ io.on('connection', (socket) => {
     if (!room) return;
     const from = socket.data.playerIndex;
     if (from === undefined) return;
+
+    const participants = [];
+    room.players.forEach((p, i) => {
+      if (i === from) return;
+      const s = io.sockets.sockets.get(p.id);
+      if (s && s.connected) participants.push(i);
+    });
+    socket.emit('voice-room-state', { participants });
     socket.to(code).emit('voice-joined', { from });
   });
 
