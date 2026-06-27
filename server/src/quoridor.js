@@ -342,7 +342,7 @@ function findBestWall(state, pi, difficulty) {
     const myOrig = shortestPath(state.walls, state.pawns[pi].r, state.pawns[pi].c, gr, gc, state.size, state.playerCount);
     const myPenalty = Math.max(0, myDist - myOrig);
     score -= myPenalty;
-    score += Math.random() * (difficulty === 'easy' ? 4 : difficulty === 'medium' ? 2 : 0.5);
+    score += Math.random() * (difficulty === 'easy' ? 2 : difficulty === 'medium' ? 1 : 0.3);
 
     if (score > bestScore) { bestScore = score; bestWall = w; }
   }
@@ -356,25 +356,259 @@ function findBestPawnMove(state, pi) {
   if (!pawnMoves.length) return null;
   const gr = goalRow(pi, state.playerCount);
   const gc = goalCol(pi, state.playerCount);
-  const best = pawnMoves.reduce((best, m) => {
+
+  let best = null, bestScore = -Infinity;
+  for (const m of pawnMoves) {
+    let score = 0;
     const dist = shortestPath(state.walls, m.r, m.c, gr, gc, state.size, state.playerCount);
-    if (!best || dist < best.dist) return { ...m, dist };
-    return best;
-  }, null);
-  return { type: 'pawn', r: best.r, c: best.c };
+    score -= dist * 10;
+
+    const myR = state.pawns[pi].r;
+    const myC = state.pawns[pi].c;
+    const side = playerSide(pi, state.playerCount);
+    if (side === 0) score += (m.r - myR) * 3;
+    else if (side === 1) score -= (m.c - myC) * 3;
+    else if (side === 2) score -= (m.r - myR) * 3;
+    else if (side === 3) score += (m.c - myC) * 3;
+
+    const occupied = state.pawns.some((p, i) => i !== pi && p.r === m.r && p.c === m.c);
+    if (occupied) score += 2;
+
+    score += Math.random() * 0.5;
+
+    if (score > bestScore) { bestScore = score; best = m; }
+  }
+  return best ? { type: 'pawn', r: best.r, c: best.c } : null;
 }
 
-export function getBotMove(state, pi, difficulty) {
-  if (state.wallsLeft[pi] > 0) {
-    const wall = findBestWall(state, pi, difficulty);
-    if (wall && (difficulty === 'hard' || difficulty === 'medium' || (difficulty === 'easy' && Math.random() < 0.75))) {
-      if (difficulty === 'easy') {
-        const blockScore = Math.max(...Array.from({ length: state.playerCount }, (_, i) => i === pi ? 0 : wallBlockScore(wall, state, i)));
-        if (blockScore > 0 || Math.random() < 0.4) return wall;
-      } else {
+function cloneState(state) {
+  return {
+    size: state.size,
+    playerCount: state.playerCount,
+    pawns: state.pawns.map(p => ({ r: p.r, c: p.c })),
+    walls: state.walls.map(w => ({ orientation: w.orientation, r: w.r, c: w.c })),
+    wallsLeft: [...state.wallsLeft],
+    turn: state.turn,
+    winner: state.winner,
+    disconnected: state.disconnected ? [...state.disconnected] : undefined,
+  };
+}
+
+function evaluateState(state, pi) {
+  const { size, playerCount, pawns, walls, wallsLeft } = state;
+  let score = 0;
+
+  const myDist = shortestPath(walls, pawns[pi].r, pawns[pi].c,
+    goalRow(pi, playerCount), goalCol(pi, playerCount), size, playerCount);
+
+  if (!isFinite(myDist)) return -99999;
+
+  const maxDist = size * 2;
+  const urgencyWeight = Math.max(0, 5 - myDist) * 5;
+  score += (maxDist - myDist) * 10 + urgencyWeight;
+  score += wallsLeft[pi] * 8;
+
+  let closestOpp = Infinity;
+
+  for (let i = 0; i < playerCount; i++) {
+    if (i === pi) continue;
+    const oppDist = shortestPath(walls, pawns[i].r, pawns[i].c,
+      goalRow(i, playerCount), goalCol(i, playerCount), size, playerCount);
+    if (!isFinite(oppDist)) {
+      score += 80;
+      continue;
+    }
+    const oppUrgency = Math.max(0, 4 - oppDist) * 30;
+    score -= (maxDist - oppDist) * 8 + oppUrgency;
+    score -= wallsLeft[i] * 5;
+    if (oppDist < closestOpp) closestOpp = oppDist;
+  }
+
+  if (isFinite(closestOpp) && myDist < closestOpp) {
+    score += (closestOpp - myDist) * 4;
+  }
+
+  return score;
+}
+
+function quickWallScore(state, w, pi) {
+  let score = 0;
+  const connects = wallConnectsToEdgeOrWall(w, state);
+  score += connects * 5;
+  for (let i = 0; i < state.playerCount; i++) {
+    if (i === pi) continue;
+    const block = wallBlockScore(w, state, i);
+    score += block * 3;
+    if (connects >= 1 && block > 0) score += block;
+  }
+  return score;
+}
+
+function getCandidateMoves(state, pi, maxWalls, maxPawns, skipWalls = false) {
+  const pc = state.playerCount;
+  const wallScale = pc <= 2 ? 1 : (pc === 3 ? 0.85 : 0.6);
+  const pawnScale = pc <= 2 ? 1 : (pc === 3 ? 0.9 : 0.75);
+  const limitWalls = Math.max(1, Math.ceil(maxWalls * wallScale));
+  const limitPawns = Math.max(1, Math.ceil(maxPawns * pawnScale));
+  const moves = [];
+
+  if (!skipWalls && state.wallsLeft[pi] > 0) {
+    const walls = getLegalWallMoves(state);
+    if (walls.length > 0) {
+      const step = pc <= 2 ? 1 : Math.max(1, Math.floor(walls.length / 40));
+      const sampled = step > 1 ? walls.filter((_, i) => i % step === 0) : walls;
+      const scored = sampled.map(w => ({
+        move: { type: 'wall', orientation: w.orientation, r: w.r, c: w.c },
+        score: quickWallScore(state, w, pi) + Math.random() * 0.01,
+      }));
+      scored.sort((a, b) => b.score - a.score);
+      for (const s of scored.slice(0, limitWalls)) {
+        moves.push(s.move);
+      }
+    }
+  }
+
+  const pawnMoves = legalPawnMoves(state, pi);
+  const myR = state.pawns[pi].r, myC = state.pawns[pi].c;
+  const side = playerSide(pi, state.playerCount);
+  const scored = pawnMoves.map(m => {
+    let dirBonus = 0;
+    if (side === 0) dirBonus = (m.r - myR);
+    else if (side === 1) dirBonus = -(m.c - myC);
+    else if (side === 2) dirBonus = -(m.r - myR);
+    else if (side === 3) dirBonus = (m.c - myC);
+    const occupied = state.pawns.some((p, i) => i !== pi && p.r === m.r && p.c === m.c);
+    return { move: { type: 'pawn', r: m.r, c: m.c }, score: dirBonus * 3 + (occupied ? 3 : 0) + Math.random() * 0.01 };
+  });
+  scored.sort((a, b) => b.score - a.score);
+  for (const s of scored.slice(0, limitPawns)) {
+    moves.push(s.move);
+  }
+
+  return moves;
+}
+
+function applyMoveUnsafe(state, pi, move) {
+  if (move.type === 'pawn') {
+    state.pawns[pi] = { r: move.r, c: move.c };
+    const gr = goalRow(pi, state.playerCount);
+    const gc = goalCol(pi, state.playerCount);
+    if (move.r === gr || move.c === gc) state.winner = pi;
+  } else {
+    state.walls.push({ orientation: move.orientation, r: move.r, c: move.c });
+    state.wallsLeft[pi] -= 1;
+  }
+  if (state.winner === null) {
+    state.turn = (pi + 1) % state.playerCount;
+  }
+}
+
+function minimax(state, depth, alpha, beta, pi, difficulty) {
+  if (depth === 0 || state.winner !== null) {
+    return evaluateState(state, pi);
+  }
+
+  const currentPlayer = state.turn;
+  const isMyTurn = currentPlayer === pi;
+  const shrink = depth >= 2;
+
+  if (isMyTurn) {
+    const maxWalls = shrink ? 2 : (difficulty === 'hard' ? 4 : 3);
+    const maxPawns = shrink ? 3 : (difficulty === 'hard' ? 5 : 4);
+    const moves = getCandidateMoves(state, currentPlayer, maxWalls, maxPawns, false);
+    if (moves.length === 0) return evaluateState(state, pi);
+    let maxEval = -Infinity;
+    for (const move of moves) {
+      const ns = cloneState(state);
+      applyMoveUnsafe(ns, currentPlayer, move);
+      if (ns.winner === currentPlayer) return 99999 + depth;
+      const ev = minimax(ns, depth - 1, alpha, beta, pi, difficulty);
+      if (ev > maxEval) maxEval = ev;
+      if (ev > alpha) alpha = ev;
+      if (beta <= alpha) break;
+    }
+    return maxEval;
+  } else {
+    const maxPawns = shrink ? 2 : 3;
+    const moves = getCandidateMoves(state, currentPlayer, 0, maxPawns, true);
+    if (moves.length === 0) return evaluateState(state, pi);
+    let minEval = Infinity;
+    for (const move of moves) {
+      const ns = cloneState(state);
+      applyMoveUnsafe(ns, currentPlayer, move);
+      if (ns.winner === currentPlayer) return -99999 - depth;
+      const ev = minimax(ns, depth - 1, alpha, beta, pi, difficulty);
+      if (ev < minEval) minEval = ev;
+      if (ev < beta) beta = ev;
+      if (beta <= alpha) break;
+    }
+    return minEval;
+  }
+}
+
+function getSearchBotMove(state, pi, difficulty, searchDepth) {
+  const maxWalls = difficulty === 'hard' ? 8 : 5;
+  const maxPawns = difficulty === 'hard' ? 10 : 7;
+  const moves = getCandidateMoves(state, pi, maxWalls, maxPawns);
+  if (moves.length === 0) return null;
+
+  const myDist = shortestPath(state.walls, state.pawns[pi].r, state.pawns[pi].c,
+    goalRow(pi, state.playerCount), goalCol(pi, state.playerCount), state.size, state.playerCount);
+  let closestOpp = Infinity;
+  for (let i = 0; i < state.playerCount; i++) {
+    if (i === pi) continue;
+    const d = shortestPath(state.walls, state.pawns[i].r, state.pawns[i].c,
+      goalRow(i, state.playerCount), goalCol(i, state.playerCount), state.size, state.playerCount);
+    if (d < closestOpp) closestOpp = d;
+  }
+  const behind = closestOpp < myDist;
+
+  let bestMove = null;
+  let bestScore = -Infinity;
+  const noise = difficulty === 'hard' ? 0.1 : 0.5;
+
+  for (const move of moves) {
+    const ns = cloneState(state);
+    applyMoveUnsafe(ns, pi, move);
+    if (ns.winner === pi) return move;
+
+    const score = minimax(ns, searchDepth - 1, -Infinity, Infinity, pi, difficulty);
+    let finalScore = score + Math.random() * noise;
+
+    if (behind && move.type === 'wall') {
+      const quick = quickWallScore(state, move, pi);
+      if (quick > 0) finalScore += Math.min(15, quick * 1.5);
+    }
+
+    if (finalScore > bestScore) {
+      bestScore = finalScore;
+      bestMove = move;
+    }
+  }
+
+  return bestMove;
+}
+
+function getEasyBotMove(state, pi) {
+  if (state.wallsLeft[pi] > 0 && Math.random() < 0.85) {
+    const wall = findBestWall(state, pi, 'easy');
+    if (wall) {
+      const blockScore = Math.max(...Array.from({ length: state.playerCount }, (_, i) =>
+        i === pi ? 0 : wallBlockScore(wall, state, i)));
+      if (blockScore > 0 || Math.random() < 0.5) {
         return wall;
       }
     }
   }
   return findBestPawnMove(state, pi);
+}
+
+export function getBotMove(state, pi, difficulty) {
+  if (difficulty === 'hard') {
+    return getSearchBotMove(state, pi, 'hard', 3);
+  } else if (difficulty === 'medium') {
+    return getSearchBotMove(state, pi, 'medium', 2);
+  } else {
+    return getEasyBotMove(state, pi);
+  }
 }
