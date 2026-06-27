@@ -16,14 +16,15 @@ import VoiceChat from './VoiceChat';
 
 const ACTIONS = [
   { id: 'move', icon: '♟' },
-  { id: 'wallH', icon: '▬' },
-  { id: 'wallV', icon: '▯' },
+  { id: 'wallH', icon: '━' },
+  { id: 'wallV', icon: '┃' },
 ];
 
 export default function Board({ room, playerIndex, isSpectator, onMove, onRematch, onLeave, error, opponentLeft }) {
   const [mode, setMode] = useState('move');
   const [view, setView] = useState('board');
   const [hover, setHover] = useState(null);
+  const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
   const toggleView = () => !isSpectator && setView(v => v === 'board' ? 'fp' : 'board');
 
   const { state, started, players, spectators, code, rematchReady } = room;
@@ -134,7 +135,7 @@ export default function Board({ room, playerIndex, isSpectator, onMove, onRematc
           )}
           <span className="hud-room">{code}</span>
           {isSpectator && <span className="hud-pill spectating">Spectating</span>}
-          <button className="hud-pill" onClick={onLeave}>Leave</button>
+          <button className="hud-pill" onClick={() => setShowLeaveConfirm(true)}>Leave</button>
         </div>
       </div>
 
@@ -155,7 +156,7 @@ export default function Board({ room, playerIndex, isSpectator, onMove, onRematc
         </div>
       )}
 
-      <VoiceChat />
+      <VoiceChat isSpectator={isSpectator} />
 
       <Chat playerIndex={playerIndex} code={code} />
 
@@ -188,7 +189,7 @@ export default function Board({ room, playerIndex, isSpectator, onMove, onRematc
               ) : (
                 <button className="btn primary" onClick={onRematch}>Rematch</button>
               )}
-              <button className="btn ghost" onClick={onLeave}>Leave</button>
+              <button className="btn ghost" onClick={() => setShowLeaveConfirm(true)}>Leave</button>
             </div>
           </div>
         </div>
@@ -198,6 +199,19 @@ export default function Board({ room, playerIndex, isSpectator, onMove, onRematc
             <h1 className="title">Player left</h1>
             <p className="tagline">Someone disconnected.</p>
             <button className="btn primary" onClick={onLeave}>Back to lobby</button>
+          </div>
+        </div>
+      ) : null}
+
+      {showLeaveConfirm ? (
+        <div className="overlay" onClick={() => setShowLeaveConfirm(false)}>
+          <div className="panel center" onClick={(e) => e.stopPropagation()}>
+            <h1 className="title">Leave game?</h1>
+            <p className="tagline">Once you leave the room you won't be able to join back.</p>
+            <div className="overlay-actions">
+              <button className="btn" onClick={() => setShowLeaveConfirm(false)}>Cancel</button>
+              <button className="btn primary" onClick={onLeave}>Leave</button>
+            </div>
           </div>
         </div>
       ) : null}

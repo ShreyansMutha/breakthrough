@@ -149,14 +149,9 @@ export function legalPawnMoves(state, pi) {
 }
 
 function isCornerTile(r, c, playerCount) {
-  let hasRowGoal = false, hasColGoal = false;
-  for (let i = 0; i < playerCount; i++) {
-    const gr = goalRow(i, playerCount);
-    const gc = goalCol(i, playerCount);
-    if (gr !== undefined && r === gr) hasRowGoal = true;
-    if (gc !== undefined && c === gc) hasColGoal = true;
-  }
-  return hasRowGoal && hasColGoal;
+  if (playerCount <= 2) return false;
+  const size = boardSize(playerCount);
+  return (r === 0 || r === size - 1) && (c === 0 || c === size - 1);
 }
 
 export function hasPath(walls, pawn, goalR, goalC, size, playerCount) {

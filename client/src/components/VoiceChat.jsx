@@ -1,14 +1,14 @@
 import { useState, useEffect } from 'react';
 import { subscribe, toggleMic, toggleSpeaker } from '../voice';
 
-export default function VoiceChat() {
+export default function VoiceChat({ isSpectator }) {
   const [state, setState] = useState({ supported: false, active: false, micEnabled: false, speakerEnabled: true });
 
   useEffect(() => {
     return subscribe(setState);
   }, []);
 
-  if (!state.supported) return null;
+  if (!state.supported || isSpectator) return null;
 
   return (
     <div className="voice-wrap">

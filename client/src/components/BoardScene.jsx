@@ -193,10 +193,64 @@ function MoveDot() {
   );
 }
 
-function Tile({ r, c, legal, half, unit, onClick, goalColor, cornerColors, diag, size }) {
+function CornerFlame() {
+  const outerRef = useRef();
+  const innerRef = useRef();
+  const coreRef = useRef();
+
+  useFrame((st) => {
+    const t = st.clock.elapsedTime;
+    [outerRef, innerRef, coreRef].forEach((ref, i) => {
+      if (!ref.current) return;
+      ref.current.material.opacity = 0.5 + Math.sin(t * 6 + i * 2) * 0.4;
+      const s = 1 + Math.sin(t * 3 + i * 1.5) * 0.12;
+      ref.current.scale.set(s, 1 + Math.sin(t * 2.5 + i * 2) * 0.2, s);
+    });
+  });
+
+  return (
+    <group position={[0, TOP + 0.04, 0]}>
+      {/* Stone pillar base */}
+      <mesh position={[0, 0.14, 0]} castShadow>
+        <cylinderGeometry args={[0.1, 0.13, 0.24, 8]} />
+        <meshStandardMaterial color="#4a5568" roughness={0.9} />
+      </mesh>
+      {/* Metal bowl */}
+      <mesh position={[0, 0.28, 0]} castShadow>
+        <cylinderGeometry args={[0.1, 0.14, 0.06, 10]} />
+        <meshStandardMaterial color="#2d3748" roughness={0.6} metalness={0.4} />
+      </mesh>
+      {/* Coals */}
+      <mesh position={[0, 0.31, 0]}>
+        <sphereGeometry args={[0.06, 6, 6]} />
+        <meshStandardMaterial color="#8b3a1a" emissive="#ff4400" emissiveIntensity={0.3} roughness={0.9} />
+      </mesh>
+      {/* Outer flame (red) */}
+      <mesh ref={outerRef} position={[0, 0.52, 0]}>
+        <coneGeometry args={[0.12, 0.4, 8]} />
+        <meshStandardMaterial color="#ff4500" emissive="#ff2200" emissiveIntensity={0.4} transparent opacity={0.7} />
+      </mesh>
+      {/* Inner flame (orange) */}
+      <mesh ref={innerRef} position={[0, 0.46, 0]}>
+        <coneGeometry args={[0.08, 0.32, 8]} />
+        <meshStandardMaterial color="#ff8c00" emissive="#ff6600" emissiveIntensity={0.6} transparent opacity={0.8} />
+      </mesh>
+      {/* Core (yellow) */}
+      <mesh ref={coreRef} position={[0, 0.4, 0]}>
+        <coneGeometry args={[0.05, 0.22, 6]} />
+        <meshStandardMaterial color="#ffd700" emissive="#ffcc00" emissiveIntensity={0.9} transparent opacity={0.85} />
+      </mesh>
+      {/* Point light for glow */}
+      <pointLight intensity={0.8} distance={3.5} color="#ff6a00" position={[0, 0.5, 0]} />
+    </group>
+  );
+}
+
+function Tile({ r, c, legal, half, unit, onClick, goalColor, cornerColors, diag, size, playerCount }) {
   const base = (r + c) % 2 === 0 ? '#3a4467' : '#323b59';
   const color = legal ? '#9b59b6' : goalColor || base;
   const isCorner = (r === 0 || r === size - 1) && (c === 0 || c === size - 1);
+  const isBlockedCorner = playerCount > 2 && isCorner;
 
   const ck = legal ? (e) => { e.stopPropagation(); onClick(r, c); } : undefined;
   const ov = legal ? (e) => { e.stopPropagation(); document.body.style.cursor = 'pointer'; } : undefined;
@@ -222,7 +276,8 @@ function Tile({ r, c, legal, half, unit, onClick, goalColor, cornerColors, diag,
           <meshStandardMaterial color={color} roughness={0.85} />
         </mesh>
       )}
-      {legal && !isCorner && <MoveDot />}
+      {legal && (playerCount === 2 || !isCorner) && <MoveDot />}
+      {isBlockedCorner && <CornerFlame />}
     </group>
   );
 }
@@ -411,13 +466,44 @@ function Celebration({ pawn, color, half, unit }) {
 function SeatedFigure({ name }) {
   return (
     <group position={[0, 0.35, 0]}>
+      {/* Left leg */}
+      <mesh position={[-0.08, 0.04, 0.06]} castShadow>
+        <cylinderGeometry args={[0.045, 0.05, 0.14, 8]} />
+        <meshStandardMaterial color={LIMB} roughness={0.7} />
+      </mesh>
+      {/* Right leg */}
+      <mesh position={[0.08, 0.04, 0.06]} castShadow>
+        <cylinderGeometry args={[0.045, 0.05, 0.14, 8]} />
+        <meshStandardMaterial color={LIMB} roughness={0.7} />
+      </mesh>
+      {/* Body */}
       <mesh position={[0, 0.2, 0]} castShadow>
         <capsuleGeometry args={[0.12, 0.2, 4, 8]} />
         <meshStandardMaterial color="#64748b" roughness={0.6} />
       </mesh>
+      {/* Left arm */}
+      <mesh position={[-0.17, 0.26, 0]} castShadow>
+        <capsuleGeometry args={[0.04, 0.14, 4, 8]} />
+        <meshStandardMaterial color={LIMB} roughness={0.6} />
+      </mesh>
+      {/* Right arm */}
+      <mesh position={[0.17, 0.26, 0]} castShadow>
+        <capsuleGeometry args={[0.04, 0.14, 4, 8]} />
+        <meshStandardMaterial color={LIMB} roughness={0.6} />
+      </mesh>
+      {/* Head */}
       <mesh position={[0, 0.42, 0]} castShadow>
         <sphereGeometry args={[0.1, 8, 8]} />
         <meshStandardMaterial color="#64748b" roughness={0.5} />
+      </mesh>
+      {/* Eyes */}
+      <mesh position={[-0.04, 0.43, 0.09]}>
+        <sphereGeometry args={[0.025, 6, 6]} />
+        <meshStandardMaterial color="#0f1320" />
+      </mesh>
+      <mesh position={[0.04, 0.43, 0.09]}>
+        <sphereGeometry args={[0.025, 6, 6]} />
+        <meshStandardMaterial color="#0f1320" />
       </mesh>
       {name && (
         <Html position={[0, 0.6, 0]} center distanceFactor={8} style={{ pointerEvents: 'none' }}>
@@ -573,6 +659,7 @@ export default function BoardScene({
                 goalColor={goalColor}
                 cornerColors={cornerColors}
                 diag={diag}
+                playerCount={playerCount}
               />
             );
           }
