@@ -148,7 +148,18 @@ export function legalPawnMoves(state, pi) {
   return moves;
 }
 
-export function hasPath(walls, pawn, goalR, goalC, size) {
+function isCornerTile(r, c, playerCount) {
+  let hasRowGoal = false, hasColGoal = false;
+  for (let i = 0; i < playerCount; i++) {
+    const gr = goalRow(i, playerCount);
+    const gc = goalCol(i, playerCount);
+    if (gr !== undefined && r === gr) hasRowGoal = true;
+    if (gc !== undefined && c === gc) hasColGoal = true;
+  }
+  return hasRowGoal && hasColGoal;
+}
+
+export function hasPath(walls, pawn, goalR, goalC, size, playerCount) {
   const wset = wallSet(walls);
   const visited = new Set();
   const stack = [pawn];
@@ -163,6 +174,7 @@ export function hasPath(walls, pawn, goalR, goalC, size) {
       const nc = c + dc;
       if (!inBounds(nr, nc, size)) continue;
       if (isBlocked(wset, r, c, nr, nc)) continue;
+      if (playerCount > 2 && isCornerTile(nr, nc, playerCount)) continue;
       if (!visited.has(`${nr},${nc}`)) stack.push({ r: nr, c: nc });
     }
   }
@@ -186,7 +198,7 @@ export function canPlaceWall(state, orientation, r, c) {
   for (let i = 0; i < state.playerCount; i++) {
     const gr = goalRow(i, state.playerCount);
     const gc = goalCol(i, state.playerCount);
-    if (!hasPath(newWalls, pawns[i], gr, gc, size)) return false;
+    if (!hasPath(newWalls, pawns[i], gr, gc, size, state.playerCount)) return false;
   }
   return true;
 }

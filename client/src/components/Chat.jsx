@@ -53,14 +53,15 @@ export default function Chat({ playerIndex, code }) {
               <div className="chat-empty">No messages yet</div>
             )}
               {messages.map((m, i) => (
-              <div key={i} className={`chat-msg${m.playerIndex === playerIndex ? ' mine' : ''}`}>
-                <span
-                  className="chat-name"
-                  style={{ color: COLORS[m.playerIndex % COLORS.length] }}
-                >
-                  {m.playerIndex === playerIndex ? 'You' : m.name}:
-                </span>
-                <span className="chat-text">{m.text}</span>
+              <div key={i} className={`chat-row${m.playerIndex === playerIndex ? ' mine' : ' others'}`}>
+                <div className={`chat-bubble${m.playerIndex === playerIndex ? ' mine' : ' others'}`}>
+                  {m.playerIndex !== playerIndex && (
+                    <div className="chat-name" style={{ color: COLORS[m.playerIndex % COLORS.length] }}>
+                      {m.name}
+                    </div>
+                  )}
+                  <div className="chat-text">{m.text}</div>
+                </div>
               </div>
             ))}
           </div>

@@ -435,7 +435,7 @@ function StadiumSeating({ size, half, spectatorNames }) {
   const seatH = 0.12;
   const rows = 5;
   const pitch = 0.8;
-  const startDist = half + 3.5;
+  const startDist = half + 4.5;
   const colors = ['#1e2740', '#232b45', '#28304a', '#2d3550', '#323b5a'];
 
   const sideConfigs = [
