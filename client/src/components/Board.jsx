@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { legalPawnMoves, canPlaceWall, COLORS, playerSide } from '../quoridor';
 import confetti from 'canvas-confetti';
+import { initVoice, destroyVoice } from '../voice';
 
 function wallOrientation(mode, pi, pc) {
   const side = playerSide(pi, pc);
@@ -10,6 +11,7 @@ function wallOrientation(mode, pi, pc) {
 }
 import BoardScene from './BoardScene';
 import Chat from './Chat';
+import VoiceChat from './VoiceChat';
 
 const ACTIONS = [
   { id: 'move', icon: '♟' },
@@ -28,6 +30,11 @@ export default function Board({ room, playerIndex, isSpectator, onMove, onRematc
   const wallsLeft = !isSpectator && started ? state.wallsLeft[playerIndex] : 0;
   const moves = myTurn && mode === 'move' ? legalPawnMoves(state, playerIndex) : [];
   const iRematched = !isSpectator && rematchReady?.[playerIndex];
+
+  useEffect(() => {
+    if (started && playerIndex !== null) { initVoice(code, playerIndex, state.playerCount); }
+    return () => destroyVoice();
+  }, [started]);
 
   useEffect(() => {
     if (state && state.winner !== null) {
@@ -131,6 +138,8 @@ export default function Board({ room, playerIndex, isSpectator, onMove, onRematc
         </div>
       )}
 
+      <VoiceChat />
+
       <Chat playerIndex={playerIndex} code={code} />
 
       {started && (
@@ -146,11 +155,6 @@ export default function Board({ room, playerIndex, isSpectator, onMove, onRematc
               </div>
             );
           })}
-          {spectators?.length > 0 && (
-            <div className="hud-player spec-count">
-              <span className="hud-pname">👁 {spectators.length}</span>
-            </div>
-          )}
         </div>
       )}
 

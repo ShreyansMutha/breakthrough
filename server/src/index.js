@@ -156,6 +156,14 @@ io.on('connection', (socket) => {
     }
   });
 
+  socket.on('voice-signal', ({ code, to, data } = {}) => {
+    const room = getRoom(code);
+    if (!room) return;
+    const from = socket.data.playerIndex;
+    if (from === undefined) return;
+    socket.to(code).emit('voice-signal', { from, to, data });
+  });
+
   socket.on('disconnect', () => {
     const room = findRoomBySocket(socket.id);
     if (!room) return;
