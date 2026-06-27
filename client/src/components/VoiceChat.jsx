@@ -17,7 +17,7 @@ export default function VoiceChat() {
         onClick={toggleMic}
         title={state.micEnabled ? 'Mute mic' : 'Unmute mic'}
       >
-        {state.micEnabled ? '🎤' : (state.active ? '🔇' : '🎤')}
+        {state.micEnabled ? '🎤' : '🔇'}
       </button>
       <button
         className={`voice-btn${state.speakerEnabled ? ' on' : ' off'}`}

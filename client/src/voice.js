@@ -8,9 +8,6 @@ let _speakerEnabled = true;
 let _listeners = [];
 let _code = '';
 let _myPi = -1;
-let _voiceActivated = false;
-
-const STORAGE_KEY = 'breakthrough_voice_activated';
 
 function notify() {
   _listeners.forEach(fn => fn(getState()));
@@ -33,17 +30,18 @@ export function subscribe(fn) {
 
 export async function toggleMic() {
   if (!localStream) {
-    const ok = await activateVoice();
-    if (!ok) {
+    await joinVoice();
+    if (!localStream) {
       notify();
       return;
     }
     _micEnabled = true;
     localStream.getAudioTracks().forEach(t => t.enabled = true);
-  } else {
-    _micEnabled = !_micEnabled;
-    localStream.getAudioTracks().forEach(t => t.enabled = _micEnabled);
+    notify();
+    return;
   }
+  _micEnabled = !_micEnabled;
+  localStream.getAudioTracks().forEach(t => t.enabled = _micEnabled);
   notify();
 }
 
@@ -108,19 +106,14 @@ async function initiateOffer(remotePi) {
   socket.emit('voice-signal', { code: _code, to: remotePi, data: { type: 'offer', sdp: pc.localDescription } });
 }
 
-async function activateVoice() {
-  if (localStream) return true;
+async function joinVoice() {
+  if (localStream) return;
   try {
     localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
     localStream.getAudioTracks().forEach(t => t.enabled = _micEnabled);
-  } catch {
-    return false;
-  }
-  _voiceActivated = true;
-  localStorage.setItem(STORAGE_KEY, 'true');
-  socket.emit('voice-join', { code: _code });
-  notify();
-  return true;
+    socket.emit('voice-join', { code: _code });
+    notify();
+  } catch {}
 }
 
 function setupSocketListeners() {
@@ -181,17 +174,9 @@ export async function initVoice(code, myPi, playerCount) {
 
   _code = code;
   _myPi = myPi;
-  _voiceActivated = localStorage.getItem(STORAGE_KEY) === 'true';
 
   setupSocketListeners();
-
-  if (_voiceActivated) {
-    const ok = await activateVoice();
-    if (!ok) {
-      _voiceActivated = false;
-      localStorage.removeItem(STORAGE_KEY);
-    }
-  }
+  await joinVoice();
 
   notify();
   return true;

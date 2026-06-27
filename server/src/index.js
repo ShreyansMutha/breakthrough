@@ -170,12 +170,10 @@ io.on('connection', (socket) => {
     const from = socket.data.playerIndex;
     if (from === undefined) return;
 
-    const participants = [];
-    room.players.forEach((p, i) => {
-      if (i === from) return;
-      const s = io.sockets.sockets.get(p.id);
-      if (s && s.connected) participants.push(i);
-    });
+    if (!room.voiceParticipants) room.voiceParticipants = new Set();
+    room.voiceParticipants.add(from);
+
+    const participants = Array.from(room.voiceParticipants).filter(pi => pi !== from);
     socket.emit('voice-room-state', { participants });
     socket.to(code).emit('voice-joined', { from });
   });
@@ -186,6 +184,7 @@ io.on('connection', (socket) => {
 
     const pi = room.players.findIndex(p => p.id === socket.id);
     if (pi !== -1) {
+      if (room.voiceParticipants) room.voiceParticipants.delete(pi);
       io.to(room.code).emit('voice-left', { from: pi });
       if (room.state) {
         room.state.disconnected[pi] = true;
